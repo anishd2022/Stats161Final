@@ -1,0 +1,33 @@
+Field,Description,Nullable,Type,Example
+label,"Whether the user clicked the ad (0 = no, 1 = yes)",No,int,"0, 1"
+user_id,User ID,No,string,"1, 2, ..."
+age,Age group of the user,Yes,string,"1, 2, 3, ..."
+gender,Gender of the user,Yes,string,"1, 2"
+residence,User’s permanent residence (province),Yes,string,"1, 2"
+city,User’s permanent residence (city ID),Yes,string,"1, 2"
+city_rank,City tier/level of user’s residence,Yes,string,"1, 2"
+series_dev,Device series,Yes,string,"1, 2"
+series_group,Device series group,Yes,string,"1, 2"
+emui_dev,EMUI (Huawei OS) version number,Yes,string,"1, 2"
+device_name,Mobile phone model used by the user,Yes,string,"1, 2"
+device_size,Screen size of the user’s device,Yes,string,"1, 2"
+net_type,"Network type during user’s behavior (e.g., WiFi, 4G)",Yes,string,"1, 2"
+task_id,Unique identifier for the advertising campaign,Yes,string,"1, 2"
+adv_id,Material ID corresponding to the advertising campaign,Yes,string,"1, 2"
+creat_type_cd,Creative type ID of the ad material,Yes,string,"1, 2"
+adv_prim_id,Advertiser ID corresponding to the ad campaign,Yes,string,"1, 2"
+inter_type_cd,"Interaction type of the ad material (e.g., click, swipe)",Yes,string,"1, 2"
+slot_id,Ad slot ID (placement position),Yes,string,"1, 2"
+site_id,Media site ID,Yes,string,"1, 2"
+spread_app_id,Application ID where the ad is displayed,Yes,string,"1, 2"
+hispace_app_tags,Tags associated with the advertised application,Yes,string,"1, 2"
+app_second_class,Secondary classification of the advertised app,Yes,string,"1, 2"
+app_score,Application rating score,Yes,int,4
+ad_click_list_001,List of ad task IDs that the user has clicked,Yes,[string],[1^2…]
+ad_click_list_002,List of advertiser IDs corresponding to clicked ads,Yes,[string],[1^2…]
+ad_click_list_003,List of apps associated with the clicked ads,Yes,[string],[1^2…]
+ad_close_list_001,List of ad task IDs that the user has closed,Yes,[string],[1^2…]
+ad_close_list_002,List of advertiser IDs corresponding to closed ads,Yes,[string],[1^2…]
+ad_close_list_003,List of apps associated with the closed ads,Yes,[string],[1^2…]
+pt_d,Timestamp (format: YYYYMMDDHHMM),No,string,202205221430
+log_id,Unique log/sample ID,No,int,12345678

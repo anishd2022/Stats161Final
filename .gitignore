@@ -1,0 +1,14 @@
+.env
+venv/
+.DS_Store
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.Renviron
+.Rprofile
+.Rproj
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata

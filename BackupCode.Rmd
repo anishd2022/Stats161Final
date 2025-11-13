@@ -1,0 +1,69 @@
+---
+title: "Backup Code"
+author: "Anish Deshpande"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Training / Validation Split (DO THIS JUST BEFORE MODELING):
+
+```{r}
+# set seed for reproducibility
+set.seed(123)
+# total number of rows
+n <- nrow(ads_data_train)
+# randomly sample 75% of the indices
+train_indices <- sample(n, size = 0.75 * n)
+# split into training and validation sets
+ads_train_split <- ads_data_train[train_indices]
+ads_validation_split <- ads_data_train[-train_indices]
+```
+
+
+# Build Neural Network Model:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## Implement Frequency Encoding:
+
+```{r}
+# create vector of column names in ads data for which we want to implement frequency encoding: 
+ads_frequency_encoding_columns <- setdiff(names(ads_train_split),
+                                          c(
+  "ad_click_list_v001", "ad_click_list_v002", "ad_click_list_v003",
+  "ad_close_list_v001", "ad_close_list_v002", "ad_close_list_v003",
+  "u_newsCatInterestsST", "label", "log_id", "user_id", "city_rank", 
+))
+```
+
+
+```{r}
+# TODO:
+# frequency encoding for columns of interest
+# join tables by user_id??
+# standardizing and scaling data?
+# implementing neural network / logistic regression / random forest??
+```
+

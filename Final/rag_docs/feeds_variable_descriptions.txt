@@ -1,0 +1,29 @@
+Field,Description,Nullable,Type,Example
+u_userId,User ID,No,string,0001
+u_phonePrice,Price range of the user's phone,Yes,string,13
+u_browserLifeCycle,User engagement level on the browser,Yes,string,10
+u_browserMode,"Browser service type (e.g., standard, lite)",Yes,string,11
+u_feedLifeCycle,User engagement level on news feeds,Yes,string,12
+u_refreshTimes,Average number of valid news feed refreshes per day,Yes,string,16
+u_newsCatInterests,Categories of news the user likes (based on clicks),Yes,[string],[1^2…]
+u_newsCatDislike,Categories of news the user dislikes (negative feedback),Yes,[string],[1^2…]
+u_newsCatInterestsST,User’s short-term interest categories,Yes,[string],[1^2…]
+u_click_ca2_news,Sequence of clicked news categories,Yes,[string],[1^2…]
+i_docId,News article document ID,Yes,string,0001
+i_s_sourceId,Source ID of the article,Yes,string,0001
+i_regionEntity,Geographic entity ID related to the article,Yes,string,0001
+i_cat,Article category ID,Yes,string,0001
+i_entities,Entity word IDs appearing in the article,Yes,[string],[1^2…]
+i_dislikeTimes,Number of times the article received negative feedback,Yes,string,60
+i_upTimes,Number of likes the article received,Yes,string,22
+I_dtype,"Display type of the article (e.g., text, image, video)",Yes,string,20
+e_ch,Channel ID (content source channel),Yes,string,"1, 2…"
+e_m,Device model from which the event originated,Yes,string,"1, 2…"
+e_po,Position/order of the item in the feed,Yes,string,9
+e_pl,Location of the visit (place ID),Yes,string,"1, 2…"
+e_rn,Refresh count (number of times refreshed),Yes,string,1
+e_section,"Feed scenario type (e.g., homepage, topic section)",Yes,string,13
+e_et,Timestamp (format: YYYYMMDDHHMM),No,string,202205221430
+label,"Whether the user clicked the article (1 = yes, -1 = no)",No,string,1
+cilLabel,"Whether the user liked the article (1 = yes, -1 = no)",No,string,1
+pro,"Article browsing progress (e.g., 1 = started, 2 = completed)",No,string,"1, 2…"

@@ -1,0 +1,10 @@
+Model,Stage,Precision,Recall,Accuracy,F1,ROC-AUC,PR-AUC
+Logistic Regression,Original,0.0,0.0,0.9857,0.0,,
+LightGBM,Original,0.4607,0.0164,0.9856,0.0317,,
+XGBoost,Original,0.75,0.0384,0.986,0.0731,,
+Logistic Regression,Weight_PCA,0.0337,0.7323,0.6751,0.0644,0.7564,0.046
+LightGBM,Weight_PCA,0.1125,0.2126,0.9623,0.1471,0.6899,0.0529
+XGBoost,Weight_PCA,0.0553,0.5197,0.8569,0.0999,0.7884,0.1236
+Logistic Regression,Optimized,0.050747,0.445545,,0.091116,0.745463,0.052107
+LightGBM,Optimized,0.050789,0.582677,,0.093434,0.760847,0.221886
+XGBoost,Optimized,0.051398,0.535433,,0.093793,0.777875,0.233997

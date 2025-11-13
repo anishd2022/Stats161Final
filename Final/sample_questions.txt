@@ -1,0 +1,7 @@
+what proportion of the column "label" contains a value of 1?
+What are the top 5 users that appear most often in the ads data?
+How many unique users had a catgory interest of 167?
+How many rows in the ads dataset contain users with exactly 3 category interests?
+How many unique users appear in both the ads and feeds datasets?
+which age group is most susceptible to engaging with ads on their feed?
+is there a correlation between tags associated with the advertised application and secondary classification of the advertised app?

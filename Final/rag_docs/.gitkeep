@@ -1,0 +1,4 @@
+# RAG Documents Folder
+# Place your documentation files here for RAG (Retrieval-Augmented Generation)
+# These documents will be used to provide context to Gemini for better SQL generation and natural language responses
+
