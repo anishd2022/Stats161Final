@@ -5,3 +5,6 @@ How many rows in the ads dataset contain users with exactly 3 category interests
 How many unique users appear in both the ads and feeds datasets?
 which age group is most susceptible to engaging with ads on their feed?
 is there a correlation between tags associated with the advertised application and secondary classification of the advertised app?
+Give me some summary statistics on user 106811
+Give me the top 3 users who clicked the highest percentage of ads that appeared for them (minimum 100 ad appearances)
+What kinds of ads should we be showing user 101650 so that he is likely to click on the ad?
