@@ -108,7 +108,7 @@ Database Schema:
 {rag_section}
 Important Notes:
 - The database uses MySQL syntax
-- JSON columns can be queried using JSON functions like JSON_EXTRACT, JSON_CONTAINS, etc.
+- JSON columns can be queried using JSON functions like JSON_EXTRACT, JSON_CONTAINS, JSON_TABLE, etc.
 - The ads and feeds tables can be joined using ads.user_id = feeds.u_userId
 - There is a view called ads_feeds_joined that joins these tables
 - Use proper MySQL syntax and data types
@@ -119,9 +119,15 @@ Instructions:
 1. First, determine if this question requires SQL to answer:
    - If the question asks about specific data values, counts, aggregations, or requires querying the database → SQL is needed
    - If the question asks about variable definitions, data structure, general information, or can be answered from documentation → SQL is NOT needed
+   - **IMPORTANT**: Recommendation-style questions (e.g., "generate ads user X will click", "recommend ads for user Y", "what ads should we show user Z") CAN be answered with SQL by:
+     * Finding items the user has interacted with (clicked ads, viewed content, etc.)
+     * Finding other items with similar characteristics (same task_id, advertiser_id, app_id, category, etc.)
+     * Returning those similar items as recommendations
+     * This does NOT require machine learning - it's a similarity-based recommendation using historical data
 
 2. If SQL is needed:
    - Generate MySQL SQL query(ies) to answer the question
+   - For recommendation queries: Find items similar to what the user has interacted with (same task_id, advertiser_id, app_id, etc.)
    - If multiple queries are needed, provide them separated by semicolons or newlines
    - Only return the SQL query(ies), without any additional explanation or markdown formatting
    - Do not include code blocks (```sql or ```) around the query
@@ -131,7 +137,15 @@ Instructions:
    - Provide a clear, helpful answer based on the schema and documentation
    - Start your response with "NO_SQL_NEEDED:" followed by your answer
 
-Remember: Only use SQL when absolutely necessary. If the question can be answered from the schema or documentation, provide a direct answer instead."""
+Reasoning Guidelines:
+- Questions asking to "generate", "recommend", "suggest", or "find ads user X will click" should use SQL to:
+  1. First, find what the user has clicked/interacted with
+  2. Then, find other ads/items with matching or similar attributes (task_id, advertiser_id, app_id, etc.)
+  3. Return those similar items as recommendations
+- This is a data-driven recommendation approach, not requiring ML models
+- Be creative with SQL - you can use subqueries, joins, and JSON functions to find similar items
+
+Remember: Only use SQL when absolutely necessary. If the question can be answered from the schema or documentation alone, provide a direct answer instead."""
     
     return prompt
 
@@ -267,6 +281,13 @@ Query Results:
 {all_results_text}
 
 Please provide a clear, concise, and easy-to-understand natural language explanation that answers the user's original question. Use the documentation context to provide richer explanations about variables, data structure, or domain knowledge when relevant. Combine all the results into one unified response. Keep the response brief but informative. If there are specific numbers, values, or patterns in the results, highlight them. If no results were returned, explain what that means in the context of the question. Focus on providing a single, cohesive answer that addresses the user's question directly.
+
+For recommendation-style queries (e.g., "generate ads", "recommend ads", "what ads should we show"):
+- Present the recommended items as a clear list if specific items are returned
+- Explain why these items were recommended (based on similar attributes to what the user has interacted with)
+- If the question asks for a specific number (e.g., "5 sample ads"), limit your response to that number
+- Format recommendations in a readable way (numbered list, bullet points, etc.)
+- Do NOT include HTML tags or div elements in your response - use plain text formatting
 
 Response:"""
     

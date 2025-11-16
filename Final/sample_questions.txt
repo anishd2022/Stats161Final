@@ -1,3 +1,4 @@
+# simple questions (these all work well)
 what proportion of the column "label" contains a value of 1?
 What are the top 5 users that appear most often in the ads data?
 How many unique users had a catgory interest of 167?
@@ -8,3 +9,8 @@ is there a correlation between tags associated with the advertised application a
 Give me some summary statistics on user 106811
 Give me the top 3 users who clicked the highest percentage of ads that appeared for them (minimum 100 ad appearances)
 What kinds of ads should we be showing user 101650 so that he is likely to click on the ad?
+suggest an advertisement that would be most likely to be clicked if shown to a user at random
+
+
+# more complex questions:
+can you generate a list of 5 sample ads which user 101650 will be likely to click on?
