@@ -19,9 +19,14 @@ CORS(app)
 # Get the directory where this script is located
 script_dir = Path(__file__).parent
 
-# Load environment variables from .env file
+# Load environment variables from .env file (if it exists)
+# On Render, use environment variables set in the dashboard instead
 env_path = script_dir / ".env"
-load_dotenv(env_path)
+if env_path.exists():
+    load_dotenv(env_path)
+else:
+    # Try loading without specific path (uses default locations)
+    load_dotenv()
 
 # Get Google API key from environment variables
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
@@ -35,8 +40,8 @@ DB_PORT = int(os.getenv('DB_PORT', 3306))
 
 if not GOOGLE_API_KEY:
     raise ValueError(
-        "GOOGLE_API_KEY not found in .env file. "
-        "Please ensure your .env file contains GOOGLE_API_KEY variable."
+        "GOOGLE_API_KEY not found in environment variables. "
+        "Please set GOOGLE_API_KEY in your environment (Render dashboard > Environment tab)."
     )
 
 # Configure Gemini API
@@ -389,7 +394,8 @@ def initialize():
         schema = load_schema()
         print("✓ Schema loaded successfully")
     except Exception as e:
-        print(f"Error loading schema: {e}")
+        print(f"⚠ Warning: Error loading schema: {e}")
+        print("  App will continue but queries may fail until schema is available.")
         schema = None
     
     # Load RAG collection
@@ -399,21 +405,27 @@ def initialize():
             chunk_count = rag_collection.count()
             print(f"✓ RAG system loaded ({chunk_count} chunks indexed)")
         else:
-            print("⚠ RAG index not found. Run build_rag_index.py to create it.")
+            print("⚠ RAG index not found. App will work without RAG context.")
     except Exception as e:
-        print(f"Warning: Could not load RAG system: {e}")
+        print(f"⚠ Warning: Could not load RAG system: {e}")
+        print("  App will continue without RAG context.")
         rag_collection = None
     
-    # Validate database connection
+    # Validate database connection (non-blocking)
     try:
         connection = get_db_connection()
         print("✓ Database connection established")
         connection.close()
     except Exception as e:
         print(f"⚠ Warning: Could not connect to database: {e}")
+        print("  App will start, but queries will fail until database is available.")
 
-# Initialize on import
-initialize()
+# Initialize on import (but don't crash if it fails)
+try:
+    initialize()
+except Exception as e:
+    print(f"⚠ Warning during initialization: {e}")
+    print("  App will continue, but some features may not work.")
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)
