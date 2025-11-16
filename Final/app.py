@@ -10,7 +10,23 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 import pymysql
 import pandas as pd
-from rag_system import load_rag_collection, retrieve_relevant_context, format_rag_context
+
+# Try importing RAG system (optional - app can work without it)
+try:
+    from rag_system import load_rag_collection, retrieve_relevant_context, format_rag_context
+except ImportError as e:
+    print(f"⚠ Warning: Failed to import rag_system: {e}")
+    print("  App will continue without RAG functionality.")
+    # Create dummy functions to avoid errors (will be defined globally)
+    def _dummy_load_rag_collection():
+        return None
+    def _dummy_retrieve_relevant_context(*args, **kwargs):
+        return []
+    def _dummy_format_rag_context(*args, **kwargs):
+        return ""
+    load_rag_collection = _dummy_load_rag_collection
+    retrieve_relevant_context = _dummy_retrieve_relevant_context
+    format_rag_context = _dummy_format_rag_context
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -38,22 +54,30 @@ DB_PW = os.getenv('DB_PW')
 DB_NAME = os.getenv('DB_NAME')
 DB_PORT = int(os.getenv('DB_PORT', 3306))
 
-if not GOOGLE_API_KEY:
-    raise ValueError(
-        "GOOGLE_API_KEY not found in environment variables. "
-        "Please set GOOGLE_API_KEY in your environment (Render dashboard > Environment tab)."
-    )
-
-# Configure Gemini API
-genai.configure(api_key=GOOGLE_API_KEY)
-
-# Initialize the Gemini model
-MODEL_NAME = 'gemini-2.5-flash'
-model = genai.GenerativeModel(MODEL_NAME)
-
 # Global variables for schema and RAG collection
 schema = None
 rag_collection = None
+model = None
+
+def get_model():
+    """Lazy initialization of Gemini model"""
+    global model
+    if model is not None:
+        return model
+    
+    if not GOOGLE_API_KEY:
+        raise ValueError(
+            "GOOGLE_API_KEY not found in environment variables. "
+            "Please set GOOGLE_API_KEY in your environment (Render dashboard > Environment tab)."
+        )
+    
+    try:
+        genai.configure(api_key=GOOGLE_API_KEY)
+        MODEL_NAME = 'gemini-2.5-flash'
+        model = genai.GenerativeModel(MODEL_NAME)
+        return model
+    except Exception as e:
+        raise ValueError(f"Failed to initialize Gemini model: {e}")
 
 def load_schema():
     """Load the SQL schema from schema_clean.sql file"""
@@ -247,7 +271,8 @@ Please provide a clear, concise, and easy-to-understand natural language explana
 Response:"""
     
     try:
-        response = model.generate_content(prompt)
+        gemini_model = get_model()
+        response = gemini_model.generate_content(prompt)
         return response.text.strip()
     except Exception as e:
         return f"Error generating natural language response: {e}"
@@ -284,7 +309,8 @@ def process_query(user_query):
         prompt = create_sql_prompt(schema, user_query, rag_context)
         
         # Generate response from Gemini
-        response = model.generate_content(prompt)
+        gemini_model = get_model()
+        response = gemini_model.generate_content(prompt)
         
         # Extract SQL queries or direct answer from response
         is_sql_needed, sql_queries, direct_answer = extract_sql_from_response(response.text)
@@ -389,6 +415,8 @@ def initialize():
     """Initialize schema and RAG collection"""
     global schema, rag_collection
     
+    print("Starting application initialization...")
+    
     # Load schema
     try:
         schema = load_schema()
@@ -419,6 +447,15 @@ def initialize():
     except Exception as e:
         print(f"⚠ Warning: Could not connect to database: {e}")
         print("  App will start, but queries will fail until database is available.")
+    
+    # Check Gemini API key (non-blocking, won't initialize model yet)
+    if not GOOGLE_API_KEY:
+        print("⚠ Warning: GOOGLE_API_KEY not found in environment variables.")
+        print("  App will start, but queries will fail until GOOGLE_API_KEY is set.")
+    else:
+        print("✓ GOOGLE_API_KEY found (model will be initialized on first use)")
+    
+    print("✓ Application initialization complete")
 
 # Initialize on import (but don't crash if it fails)
 try:
