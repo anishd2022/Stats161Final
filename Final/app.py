@@ -465,5 +465,7 @@ except Exception as e:
     print("  App will continue, but some features may not work.")
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    # For local development only (gunicorn ignores this)
+    port = int(os.getenv('PORT', 5001))
+    app.run(debug=True, host='0.0.0.0', port=port)
 

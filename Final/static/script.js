@@ -78,23 +78,17 @@ function sendMessage() {
         }
         
         if (data.success) {
-            // Add bot response
-            let content = data.answer;
+            // Strip any HTML from the LLM response (keep only plain text)
+            let content = stripHtml(data.answer);
             
-            // Add SQL queries if they were executed
+            // Add SQL queries if they were executed (as separate HTML element)
             if (data.needs_sql && data.sql_queries && data.sql_queries.length > 0) {
-                content += '\n\n<div class="sql-queries">';
-                content += '<div class="sql-queries-title">SQL Queries Executed:</div>';
-                data.sql_queries.forEach((q, idx) => {
-                    content += `<div class="sql-query">${escapeHtml(q.query)}</div>`;
-                    if (q.row_count !== undefined) {
-                        content += `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem; margin-bottom: 0.5rem;">${q.row_count} row(s) returned</div>`;
-                    }
-                });
-                content += '</div>';
+                const sqlQueriesHtml = formatSqlQueries(data.sql_queries);
+                // Add as a separate part to be handled correctly
+                addMessage('bot', content, false, sqlQueriesHtml);
+            } else {
+                addMessage('bot', content);
             }
-            
-            addMessage('bot', content);
         } else {
             // Show error
             addMessage('error', `Error: ${data.error || 'Something went wrong'}`);
@@ -112,7 +106,7 @@ function sendMessage() {
     });
 }
 
-function addMessage(type, content, isLoading = false) {
+function addMessage(type, content, isLoading = false, sqlQueriesHtml = null) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${type}`;
     
@@ -137,12 +131,17 @@ function addMessage(type, content, isLoading = false) {
     const icon = type === 'user' ? '👤' : type === 'error' ? '⚠️' : '🤖';
     const header = type === 'user' ? 'You' : type === 'error' ? 'Error' : 'Assistant';
     
+    let contentHtml = formatContent(content);
+    if (sqlQueriesHtml) {
+        contentHtml += sqlQueriesHtml;
+    }
+    
     messageDiv.innerHTML = `
         <div class="message-header">
             <span class="icon">${icon}</span>
             <span>${header}</span>
         </div>
-        <div class="message-content">${formatContent(content)}</div>
+        <div class="message-content">${contentHtml}</div>
     `;
     
     chatContainer.appendChild(messageDiv);
@@ -152,12 +151,12 @@ function addMessage(type, content, isLoading = false) {
 }
 
 function formatContent(content) {
-    // Convert markdown-style code blocks to HTML
+    // Escape HTML first
     content = escapeHtml(content);
     
     // Handle code blocks
     content = content.replace(/```(\w+)?\n([\s\S]*?)```/g, function(match, lang, code) {
-        return `<pre><code>${code.trim()}</code></pre>`;
+        return `<pre><code>${escapeHtml(code.trim())}</code></pre>`;
     });
     
     // Handle inline code
@@ -166,22 +165,28 @@ function formatContent(content) {
     // Handle line breaks
     content = content.replace(/\n/g, '<br>');
     
-    // Handle SQL queries div (already HTML)
-    if (content.includes('<div class="sql-queries">')) {
-        // Don't escape HTML inside SQL queries div
-        const parts = content.split(/(<div class="sql-queries">[\s\S]*?<\/div>)/);
-        let result = '';
-        for (let i = 0; i < parts.length; i++) {
-            if (parts[i].startsWith('<div class="sql-queries">')) {
-                result += parts[i];
-            } else {
-                result += parts[i];
-            }
-        }
-        return result;
-    }
-    
     return content;
+}
+
+function stripHtml(html) {
+    // Remove all HTML tags from the response, keeping only text content
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || '';
+}
+
+function formatSqlQueries(sqlQueries) {
+    let html = '<div class="sql-queries">';
+    html += '<div class="sql-queries-title">SQL Queries Executed:</div>';
+    sqlQueries.forEach((q, idx) => {
+        html += `<div class="sql-query">${escapeHtml(q.query)}</div>`;
+        if (q.row_count !== undefined) {
+            const countText = typeof q.row_count === 'number' ? `${q.row_count} row(s)` : 'rows';
+            html += `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem; margin-bottom: 0.5rem;">${countText} returned</div>`;
+        }
+    });
+    html += '</div>';
+    return html;
 }
 
 function escapeHtml(text) {
