@@ -15,3 +15,62 @@ when were the majority of these ads shown to users? Were there any specific peak
 
 # more complex questions:
 can you generate a list of 5 sample ads which user 101650 will be likely to click on?
+
+
+# ADVANCED & CREATIVE TEST QUESTIONS:
+
+## Temporal & Trend Analysis
+1. Which hour of the day has the highest ad click-through rate, and does this pattern differ by user age group?
+2. For users who clicked ads, what's the average time gap between when they viewed a feed article and when they clicked an ad? Does this vary by the category of news they were reading?
+3. Are there specific days of the week when certain advertiser IDs perform significantly better? Show me the top 3 advertiser-day combinations by click rate.
+4. Identify users whose ad click behavior changed over time - find users who clicked less than 10% of ads in their first 50 ad views but clicked more than 30% in their last 50 ad views.
+5. What's the correlation between a user's feed refresh frequency (u_refreshTimes) and their ad engagement rate? Do heavy feed users click more ads?
+
+## Complex JSON & List Operations
+6. Find users who have clicked ads from at least 5 different advertisers (using ad_click_list_v002) but have never closed an ad from those same advertisers.
+7. Which users have overlapping interests between their news category preferences (u_newsCatInterests) and the app categories of ads they've clicked? Show the top 10 users with the highest overlap percentage.
+8. Identify users whose short-term news interests (u_newsCatInterestsST) completely changed - meaning none of their current short-term interests match their historical clicked news categories (u_click_ca2_news).
+9. Find all ads where the advertised app's tags (hispace_app_tags) contain at least 3 tags that also appear in the user's clicked ad app list (ad_click_list_v003).
+10. Which users have clicked ads from apps (ad_click_list_v003) that are in their disliked news categories (u_newsCatDislike)? This might indicate a targeting issue.
+
+## Cross-Table Correlations & Joins
+11. Do users who like news articles (cillabel = 1) have different ad click rates compared to users who don't engage with news content? Calculate the click-through rate for both groups.
+12. Find users who clicked on feed articles (feeds.label = 1) within 30 minutes of viewing an ad, and determine if the news category they clicked matches the app category of the ad they saw.
+13. Which advertisers are most effective at converting users who have never clicked an ad before? Show advertisers with at least 10 first-time clickers and their conversion rate.
+14. Is there a relationship between the position of an ad in the feed (if available) and click rate? Also check if this varies by device type (device_name).
+15. Find users who have high engagement with both feeds (many clicks) and ads (many clicks) - what characteristics do these "power users" share? Show their common demographics and device preferences.
+
+## Advanced Recommendation & Personalization
+16. Create a personalized ad recommendation for user 101650 that considers: (1) apps they've clicked before, (2) news categories they like, (3) advertisers they've engaged with, and (4) apps with high ratings (app_score > 4.0). Return 5 specific ad task_ids.
+17. Which combination of advertiser ID, app category, and creative type has the highest click rate among users aged 25-35 in tier-1 cities? Use this to suggest an optimal ad configuration.
+18. Find "cold start" users (users with less than 5 total ad views) and recommend ads based on similar users' preferences - identify users with similar demographics who clicked ads, then suggest those same ads.
+19. For each user, calculate a "diversity score" based on how many different app categories they've clicked ads from. Then find users with low diversity scores and suggest ads from categories they haven't tried yet.
+20. Build a recommendation system that suggests ads based on collaborative filtering: if user A and user B have clicked similar ads, and user A clicked ad X but user B hasn't seen it, recommend ad X to user B.
+
+## Edge Cases & Anomaly Detection
+21. Identify "ad-avoidant" users - users who have closed more than 20 ads but clicked fewer than 2. What patterns do you notice about these users?
+22. Find advertisers who have a high number of ad impressions but extremely low click rates (< 1%). What might be wrong with their targeting?
+23. Detect potential bot behavior: find users who clicked ads at an impossibly fast rate (multiple clicks within the same second) or clicked ads from more than 50 different advertisers in a single day.
+24. Which users have inconsistent behavior - they clicked ads from apps in categories they've explicitly disliked in their news feed (u_newsCatDislike)? This might indicate data quality issues or targeting problems.
+25. Find "swing users" - users whose click rate varies dramatically by time of day (e.g., high click rate in morning, low in evening). What are their characteristics?
+
+## Business Intelligence & Strategy
+26. If we want to maximize revenue, should we focus on showing ads to users with high click rates or users with high feed engagement? Analyze the relationship and make a recommendation.
+27. Calculate the "lifetime value" of each user based on their total ad clicks, feed engagement, and recency. Rank the top 100 most valuable users.
+28. Which device models (device_name) have the highest ad click rates? Should we optimize ad creative types (creat_type_cd) differently for different devices?
+29. Analyze the relationship between network type (net_type) and ad engagement. Do users on WiFi click more ads than users on mobile data? Does this vary by ad creative type?
+30. Create a segmentation of users into groups based on their ad and feed behavior patterns. Then, for each segment, identify the optimal ad characteristics (advertiser, app category, creative type) that would maximize click rates.
+
+## Multi-Step Reasoning & Complex Logic
+31. Find users who clicked an ad, then within the next hour clicked a feed article in a related category, then clicked another ad. What's the pattern in these "conversion funnels"?
+32. Identify the "perfect storm" combination: users who are in the right age group, have the right device, are on the right network, viewing at the right time, and seeing the right ad type - what's the click rate for this optimal combination?
+33. For users who have both clicked and closed ads from the same advertiser, analyze what differentiates the ads they clicked vs. the ones they closed. Look at app categories, creative types, and timing.
+34. Calculate a "user fatigue score" - users who have seen many ads from the same advertiser might have decreasing click rates. Find advertisers who should diversify their targeting to avoid user fatigue.
+35. Build a predictive feature: for each user, calculate the probability they'll click an ad based on: their historical click rate, current feed engagement level, time of day, and similarity to ads they've clicked before.
+
+## Creative & Open-Ended
+36. If I wanted to launch a new advertising campaign for a gaming app, which users should I target and what characteristics should my ads have to maximize click-through rate?
+37. Design an A/B test scenario: compare the effectiveness of showing ads immediately after a user clicks a news article vs. showing ads after they've scrolled through 5 articles. Use the data to simulate which would perform better.
+38. What's the "sweet spot" for ad frequency? Find users who saw between 10-20 ads and calculate their click rate, then compare to users who saw 50+ ads. Is there diminishing returns?
+39. Create a "user journey map" for user 101650: show their feed interactions, ad views, and ad clicks in chronological order. What patterns emerge?
+40. If we could only show one ad per user per day, which ad would maximize the overall click rate across all users? Consider user preferences, ad quality (app_score), and historical performance.
