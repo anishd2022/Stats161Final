@@ -3,6 +3,12 @@
 const chatContainer = document.getElementById('chatContainer');
 const queryInput = document.getElementById('queryInput');
 const sendButton = document.getElementById('sendButton');
+const newChatButton = document.getElementById('newChatButton');
+const chatList = document.getElementById('chatList');
+
+// Current session state
+let currentSessionId = null;
+let chatMessages = {}; // session_id -> array of messages
 
 // Auto-resize textarea
 queryInput.addEventListener('input', function() {
@@ -26,8 +32,11 @@ queryInput.addEventListener('keydown', function(e) {
 // Send button click
 sendButton.addEventListener('click', sendMessage);
 
-// Example query click handlers
+// Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
+    loadChatList();
+    
+    // Example query click handlers
     const exampleQueries = document.querySelectorAll('.example-queries li');
     exampleQueries.forEach(li => {
         li.addEventListener('click', function() {
@@ -38,7 +47,133 @@ document.addEventListener('DOMContentLoaded', function() {
             queryInput.focus();
         });
     });
+    
+    // New chat button handler
+    newChatButton.addEventListener('click', createNewChat);
 });
+
+function loadChatList() {
+    fetch('/api/chats')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderChatList(data.chats);
+                // If no current session and chats exist, select the first one
+                if (!currentSessionId && data.chats.length > 0) {
+                    switchToChat(data.chats[0].session_id);
+                } else if (currentSessionId) {
+                    // Re-render to update active state without switching
+                    renderChatList(data.chats);
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error loading chat list:', error);
+        });
+}
+
+function renderChatList(chats) {
+    chatList.innerHTML = '';
+    chats.forEach(chat => {
+        const chatItem = document.createElement('div');
+        chatItem.className = 'chat-item';
+        if (chat.session_id === currentSessionId) {
+            chatItem.classList.add('active');
+        }
+        chatItem.textContent = chat.title;
+        chatItem.addEventListener('click', () => switchToChat(chat.session_id));
+        chatList.appendChild(chatItem);
+    });
+}
+
+function createNewChat() {
+    return fetch('/api/chats/new', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            currentSessionId = data.session_id;
+            chatMessages[currentSessionId] = [];
+            clearChatContainer();
+            loadChatList();
+            queryInput.focus();
+            return data;
+        } else {
+            throw new Error(data.error || 'Failed to create chat');
+        }
+    })
+    .catch(error => {
+        console.error('Error creating new chat:', error);
+        throw error;
+    });
+}
+
+function switchToChat(sessionId) {
+    currentSessionId = sessionId;
+    
+    // Clear current chat display
+    clearChatContainer();
+    
+    // Load messages for this session if they exist
+    if (chatMessages[sessionId] && chatMessages[sessionId].length > 0) {
+        chatMessages[sessionId].forEach(msg => {
+            addMessageToContainer(msg.type, msg.content, false, msg.sqlQueriesHtml);
+        });
+    } else {
+        // Show welcome message if no messages
+        showWelcomeMessage();
+    }
+    
+    // Re-render chat list to update active state
+    fetch('/api/chats')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderChatList(data.chats);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading chat list:', error);
+        });
+    
+    queryInput.focus();
+}
+
+function clearChatContainer() {
+    chatContainer.innerHTML = '';
+}
+
+function showWelcomeMessage() {
+    chatContainer.innerHTML = `
+        <div class="welcome-message">
+            <div class="welcome-icon">💬</div>
+            <h2>Welcome!</h2>
+            <p>I'm your database assistant. Ask me anything about your data, and I'll help you find the answers.</p>
+            <p class="examples">Try asking things like:</p>
+            <ul class="example-queries">
+                <li>"How many users are in the database?"</li>
+                <li>"What is the average age of users?"</li>
+                <li>"Show me the top 10 most active users"</li>
+            </ul>
+        </div>
+    `;
+    
+    // Re-attach example query handlers
+    const exampleQueries = document.querySelectorAll('.example-queries li');
+    exampleQueries.forEach(li => {
+        li.addEventListener('click', function() {
+            queryInput.value = this.textContent.trim();
+            queryInput.style.height = 'auto';
+            queryInput.style.height = queryInput.scrollHeight + 'px';
+            sendButton.disabled = false;
+            queryInput.focus();
+        });
+    });
+}
 
 function sendMessage() {
     const query = queryInput.value.trim();
@@ -55,19 +190,45 @@ function sendMessage() {
         welcomeMessage.remove();
     }
     
-    // Add user message
+    // Initialize session if needed
+    if (!currentSessionId) {
+        createNewChat().then(() => {
+            // After creating chat, send the message
+            sendMessageWithSession(query);
+        });
+        return;
+    }
+    
+    sendMessageWithSession(query);
+}
+
+function sendMessageWithSession(query) {
+    // Initialize messages array for this session if needed
+    if (!chatMessages[currentSessionId]) {
+        chatMessages[currentSessionId] = [];
+    }
+    
+    // Add user message to display and storage
     addMessage('user', query);
+    chatMessages[currentSessionId].push({
+        type: 'user',
+        content: query,
+        sqlQueriesHtml: null
+    });
     
     // Show loading indicator
     const loadingId = addMessage('bot', '', true);
     
-    // Send query to backend
+    // Send query to backend with session_id
     fetch('/api/query', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ query: query })
+        body: JSON.stringify({ 
+            query: query,
+            session_id: currentSessionId
+        })
     })
     .then(response => response.json())
     .then(data => {
@@ -77,21 +238,42 @@ function sendMessage() {
             loadingElement.remove();
         }
         
+        // Update session_id if returned (for new chats)
+        if (data.session_id) {
+            currentSessionId = data.session_id;
+        }
+        
         if (data.success) {
             // Strip any HTML from the LLM response (keep only plain text)
             let content = stripHtml(data.answer);
             
             // Add SQL queries if they were executed (as separate HTML element)
+            let sqlQueriesHtml = null;
             if (data.needs_sql && data.sql_queries && data.sql_queries.length > 0) {
-                const sqlQueriesHtml = formatSqlQueries(data.sql_queries);
+                sqlQueriesHtml = formatSqlQueries(data.sql_queries);
                 // Add as a separate part to be handled correctly
                 addMessage('bot', content, false, sqlQueriesHtml);
             } else {
                 addMessage('bot', content);
             }
+            
+            // Store bot message
+            chatMessages[currentSessionId].push({
+                type: 'bot',
+                content: content,
+                sqlQueriesHtml: sqlQueriesHtml
+            });
+            
+            // Reload chat list to update titles
+            loadChatList();
         } else {
             // Show error
             addMessage('error', `Error: ${data.error || 'Something went wrong'}`);
+            chatMessages[currentSessionId].push({
+                type: 'error',
+                content: `Error: ${data.error || 'Something went wrong'}`,
+                sqlQueriesHtml: null
+            });
         }
     })
     .catch(error => {
@@ -102,11 +284,23 @@ function sendMessage() {
         }
         
         // Show error
-        addMessage('error', `Error: ${error.message || 'Failed to connect to server'}`);
+        const errorMsg = `Error: ${error.message || 'Failed to connect to server'}`;
+        addMessage('error', errorMsg);
+        if (currentSessionId && chatMessages[currentSessionId]) {
+            chatMessages[currentSessionId].push({
+                type: 'error',
+                content: errorMsg,
+                sqlQueriesHtml: null
+            });
+        }
     });
 }
 
 function addMessage(type, content, isLoading = false, sqlQueriesHtml = null) {
+    return addMessageToContainer(type, content, isLoading, sqlQueriesHtml);
+}
+
+function addMessageToContainer(type, content, isLoading = false, sqlQueriesHtml = null) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${type}`;
     

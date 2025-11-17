@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 import pymysql
 import pandas as pd
+import uuid
+from datetime import datetime
 
 # Try importing RAG system (optional - app can work without it)
 try:
@@ -59,6 +61,11 @@ schema = None
 rag_collection = None
 model = None
 
+# Chat session management: session_id -> ChatSession
+chat_sessions = {}
+# Chat metadata: session_id -> {"title": str, "created_at": timestamp, "message_count": int}
+chat_metadata = {}
+
 def get_model():
     """Lazy initialization of Gemini model"""
     global model
@@ -92,8 +99,8 @@ def load_schema():
             "Please ensure schema_clean.sql exists in the Final/ folder."
         )
 
-def create_sql_prompt(schema, user_query, rag_context=""):
-    """Create a prompt that includes the schema, RAG context, and instructions for generating SQL queries."""
+def create_full_sql_prompt(schema, user_query, rag_context=""):
+    """Create the full prompt for the first message in a chat session."""
     rag_section = ""
     if rag_context:
         rag_section = f"""
@@ -146,6 +153,18 @@ Reasoning Guidelines:
 - Be creative with SQL - you can use subqueries, joins, and JSON functions to find similar items
 
 Remember: Only use SQL when absolutely necessary. If the question can be answered from the schema or documentation alone, provide a direct answer instead."""
+    
+    return prompt
+
+def create_short_sql_prompt(user_query, rag_context=""):
+    """Create a short prompt for subsequent messages in a chat session (context already exists)."""
+    rag_section = ""
+    if rag_context:
+        rag_section = f"\nAdditional Context from Documentation:\n{rag_context}\n"
+    
+    prompt = f"""User Question: {user_query}{rag_section}
+
+Follow the same process as before: determine if SQL is needed, generate SQL queries if required (starting with "SQL_NEEDED:"), or provide a direct answer (starting with "NO_SQL_NEEDED:"). Use the database schema and context from our previous conversation."""
     
     return prompt
 
@@ -240,7 +259,7 @@ def format_results_as_text(results, max_rows=100):
     else:
         return str(results)
 
-def generate_combined_natural_language_response(user_query, all_sql_queries, all_results, rag_context=""):
+def generate_combined_natural_language_response(user_query, all_sql_queries, all_results, rag_context="", chat_session=None, is_first_message=False):
     """Generate a combined natural language explanation of all query results using Gemini."""
     # Format all SQL queries as context
     if len(all_sql_queries) > 1:
@@ -272,7 +291,8 @@ Additional Context from Documentation:
 """
     
     # Create prompt for natural language formatting
-    prompt = f"""You are a data analyst assistant. A user asked a question about a database, and we executed SQL query(ies) to get the results. 
+    if is_first_message:
+        prompt = f"""You are a data analyst assistant. A user asked a question about a database, and we executed SQL query(ies) to get the results. 
 
 Original User Question: {user_query}
 {rag_section}{sql_context}
@@ -290,20 +310,80 @@ For recommendation-style queries (e.g., "generate ads", "recommend ads", "what a
 - Do NOT include HTML tags or div elements in your response - use plain text formatting
 
 Response:"""
+    else:
+        # Shorter prompt for subsequent messages
+        prompt = f"""User Question: {user_query}{rag_section}
+
+SQL Queries Executed:
+{sql_context}
+
+Query Results:
+{all_results_text}
+
+Provide a clear, concise natural language explanation answering the user's question. Use the same formatting guidelines as before."""
     
     try:
-        gemini_model = get_model()
-        response = gemini_model.generate_content(prompt)
-        return response.text.strip()
+        if chat_session:
+            # Use chat session for all messages (maintains context)
+            response = chat_session.send_message(prompt)
+            return response.text.strip()
+        else:
+            # Fallback to direct model call if no chat session
+            gemini_model = get_model()
+            response = gemini_model.generate_content(prompt)
+            return response.text.strip()
     except Exception as e:
         return f"Error generating natural language response: {e}"
 
-def process_query(user_query):
+def create_new_chat():
+    """Create a new chat session and return its ID."""
+    session_id = str(uuid.uuid4())
+    chat_metadata[session_id] = {
+        "title": "New Chat",
+        "created_at": datetime.now().isoformat(),
+        "message_count": 0
+    }
+    return session_id
+
+def get_or_create_chat_session(session_id):
+    """Get existing chat session or create a new one if session_id is None."""
+    global chat_sessions
+    
+    if session_id is None or session_id not in chat_sessions:
+        # Create new chat session
+        if session_id is None:
+            session_id = create_new_chat()
+        else:
+            # Session ID provided but doesn't exist, create metadata
+            if session_id not in chat_metadata:
+                chat_metadata[session_id] = {
+                    "title": "New Chat",
+                    "created_at": datetime.now().isoformat(),
+                    "message_count": 0
+                }
+        
+        gemini_model = get_model()
+        chat_sessions[session_id] = gemini_model.start_chat(history=[])
+    
+    return session_id, chat_sessions[session_id]
+
+def update_chat_title(session_id, user_query):
+    """Update chat title based on first user query if it's still "New Chat"."""
+    if session_id in chat_metadata:
+        if chat_metadata[session_id]["title"] == "New Chat" and chat_metadata[session_id]["message_count"] == 1:
+            # Generate a short title from the first query (max 50 chars)
+            title = user_query[:50]
+            if len(user_query) > 50:
+                title += "..."
+            chat_metadata[session_id]["title"] = title
+
+def process_query(user_query, session_id=None):
     """
     Process a single user query and return the response.
     
     Args:
         user_query: User's question
+        session_id: Optional chat session ID for maintaining context
     
     Returns:
         Dictionary with response details
@@ -319,6 +399,12 @@ def process_query(user_query):
     
     connection = None
     try:
+        # Get or create chat session
+        session_id, chat_session = get_or_create_chat_session(session_id)
+        
+        # Check if this is the first message in the chat
+        is_first_message = chat_metadata[session_id]["message_count"] == 0
+        
         # Retrieve relevant RAG context
         rag_context = ""
         if rag_collection:
@@ -326,30 +412,43 @@ def process_query(user_query):
             if retrieved_chunks:
                 rag_context = format_rag_context(retrieved_chunks)
         
-        # Create the prompt with schema, RAG context, and user query
-        prompt = create_sql_prompt(schema, user_query, rag_context)
+        # Create the prompt - full for first message, short for subsequent
+        if is_first_message:
+            prompt = create_full_sql_prompt(schema, user_query, rag_context)
+        else:
+            prompt = create_short_sql_prompt(user_query, rag_context)
         
-        # Generate response from Gemini
-        gemini_model = get_model()
-        response = gemini_model.generate_content(prompt)
+        # Generate response from Gemini using chat session
+        if is_first_message:
+            # First message: send to chat session (this initializes the history)
+            response = chat_session.send_message(prompt)
+        else:
+            # Subsequent messages: use chat session (maintains history)
+            response = chat_session.send_message(prompt)
         
         # Extract SQL queries or direct answer from response
         is_sql_needed, sql_queries, direct_answer = extract_sql_from_response(response.text)
         
         # Handle case where SQL is not needed (direct answer)
         if not is_sql_needed:
+            # Update chat metadata
+            chat_metadata[session_id]["message_count"] += 1
+            update_chat_title(session_id, user_query)
+            
             return {
                 "success": True,
                 "answer": direct_answer,
                 "sql_queries": [],
-                "needs_sql": False
+                "needs_sql": False,
+                "session_id": session_id
             }
         
         if not sql_queries:
             return {
                 "success": False,
                 "error": "No SQL queries found in the response.",
-                "answer": None
+                "answer": None,
+                "session_id": session_id
             }
         
         # Connect to database
@@ -372,33 +471,41 @@ def process_query(user_query):
                     "success": False,
                     "error": f"Error executing query: {e}",
                     "sql_query": sql_query,
-                    "answer": None
+                    "answer": None,
+                    "session_id": session_id
                 }
         
         # Generate combined natural language response for all results
         if all_results:
             natural_language_response = generate_combined_natural_language_response(
-                user_query, sql_queries, all_results, rag_context
+                user_query, sql_queries, all_results, rag_context, chat_session, is_first_message
             )
+            
+            # Update chat metadata
+            chat_metadata[session_id]["message_count"] += 1
+            update_chat_title(session_id, user_query)
             
             return {
                 "success": True,
                 "answer": natural_language_response,
                 "sql_queries": executed_queries,
-                "needs_sql": True
+                "needs_sql": True,
+                "session_id": session_id
             }
         else:
             return {
                 "success": False,
                 "error": "No results returned from queries.",
-                "answer": None
+                "answer": None,
+                "session_id": session_id
             }
         
     except Exception as e:
         return {
             "success": False,
             "error": str(e),
-            "answer": None
+            "answer": None,
+            "session_id": session_id if 'session_id' in locals() else None
         }
     finally:
         if connection:
@@ -415,6 +522,7 @@ def query():
     try:
         data = request.get_json()
         user_query = data.get('query', '').strip()
+        session_id = data.get('session_id', None)
         
         if not user_query:
             return jsonify({
@@ -423,9 +531,46 @@ def query():
             }), 400
         
         # Process the query
-        result = process_query(user_query)
+        result = process_query(user_query, session_id)
         return jsonify(result)
         
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/chats', methods=['GET'])
+def get_chats():
+    """Get list of all chat sessions"""
+    try:
+        chats = []
+        for session_id, metadata in chat_metadata.items():
+            chats.append({
+                "session_id": session_id,
+                "title": metadata["title"],
+                "created_at": metadata["created_at"],
+                "message_count": metadata["message_count"]
+            })
+        # Sort by created_at descending (newest first)
+        chats.sort(key=lambda x: x["created_at"], reverse=True)
+        return jsonify({"success": True, "chats": chats})
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/api/chats/new', methods=['POST'])
+def create_chat():
+    """Create a new chat session"""
+    try:
+        session_id = create_new_chat()
+        return jsonify({
+            "success": True,
+            "session_id": session_id,
+            "title": chat_metadata[session_id]["title"]
+        })
     except Exception as e:
         return jsonify({
             "success": False,
