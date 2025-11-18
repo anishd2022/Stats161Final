@@ -69,24 +69,35 @@ class ReActAgent:
         """
         self.steps = []
         
-        # Build initial prompt
-        system_prompt = self._build_system_prompt(rag_context)
-        conversation_history = []
+        # Start a chat session for this query
+        chat_session = self.model.start_chat(history=[])
         
-        # Initial user query
-        conversation_history.append({
-            "role": "user",
-            "parts": [f"User Question: {user_query}"]
-        })
+        # Build and send initial system prompt
+        system_prompt = self._build_system_prompt(rag_context)
+        initial_message = f"{system_prompt}\n\nUser Question: {user_query}\n\nWhat should I do first? Think step by step, then decide on an action."
         
         for iteration in range(self.max_iterations):
             if self.verbose:
                 print(f"\n--- ReAct Iteration {iteration + 1} ---")
             
             # Step 1: Thought - Agent reasons about what to do
-            thought_prompt = self._build_thought_prompt(conversation_history)
-            thought_response = self.model.generate_content(thought_prompt)
-            thought_text = thought_response.text.strip()
+            try:
+                if iteration == 0:
+                    # First iteration: send initial message
+                    thought_response = chat_session.send_message(initial_message)
+                else:
+                    # Subsequent iterations: ask what to do next
+                    thought_prompt = "What should I do next? Think step by step, then decide on an action. Format: Thought: [reasoning] Action: tool_name(args) or FINAL_ANSWER: [answer]"
+                    thought_response = chat_session.send_message(thought_prompt)
+                
+                thought_text = thought_response.text.strip()
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": f"Error getting agent response: {str(e)}",
+                    "steps": self.steps,
+                    "iterations": iteration + 1
+                }
             
             if self.verbose:
                 print(f"Thought: {thought_text[:200]}...")
@@ -94,6 +105,9 @@ class ReActAgent:
             # Check if agent thinks it's done
             if self._is_final_answer(thought_text):
                 final_answer = self._extract_final_answer(thought_text)
+                if not final_answer:
+                    # If extraction failed, use the text as-is
+                    final_answer = thought_text
                 return {
                     "success": True,
                     "answer": final_answer,
@@ -117,13 +131,10 @@ class ReActAgent:
                         "reasoning_visible": False
                     }
                 else:
-                    # Error - agent is stuck
-                    return {
-                        "success": False,
-                        "error": "Agent could not determine next action or final answer",
-                        "steps": self.steps,
-                        "iterations": iteration + 1
-                    }
+                    # Error - agent is stuck, ask it to try again
+                    error_msg = "I couldn't parse your action. Please format it as: Action: tool_name(arg1=value1, arg2=value2) or provide FINAL_ANSWER: [your answer]"
+                    chat_session.send_message(error_msg)
+                    continue
             
             step = ReActStep(thought=thought_text, action=action)
             self.steps.append(step)
@@ -141,34 +152,66 @@ class ReActAgent:
             if self.verbose:
                 print(f"Observation: {observation[:200]}...")
             
-            # Add to conversation history
-            conversation_history.append({
-                "role": "model",
-                "parts": [f"Thought: {thought_text}\nAction: {self._format_action_for_llm(action)}\nObservation: {observation}"]
-            })
+            # Format observation for chat (truncate if too long)
+            observation_for_chat = observation
+            if len(observation_for_chat) > 2000:
+                observation_for_chat = observation_for_chat[:2000] + "\n[Results truncated for length...]"
+            
+            # Send observation back to agent
+            observation_message = f"Observation from {action['tool']}:\n{observation_for_chat}"
+            chat_session.send_message(observation_message)
             
             # Check if we have enough information to answer
-            if tool_result.success and self._has_enough_information(conversation_history):
+            if tool_result.success and self._has_enough_information():
                 # Ask agent to finalize answer
-                final_prompt = self._build_final_prompt(user_query, conversation_history)
-                final_response = self.model.generate_content(final_prompt)
-                final_answer = final_response.text.strip()
-                
-                return {
-                    "success": True,
-                    "answer": final_answer,
-                    "steps": self.steps,
-                    "iterations": iteration + 1,
-                    "reasoning_visible": False
-                }
+                final_prompt = f"Based on all the information gathered, provide a clear, concise answer to the user's original question: '{user_query}'. Format your response as: FINAL_ANSWER: [your answer]"
+                try:
+                    final_response = chat_session.send_message(final_prompt)
+                    final_answer = final_response.text.strip()
+                    
+                    # Extract final answer if it has the marker
+                    if "FINAL_ANSWER:" in final_answer.upper():
+                        final_answer = self._extract_final_answer(final_answer) or final_answer
+                    
+                    return {
+                        "success": True,
+                        "answer": final_answer,
+                        "steps": self.steps,
+                        "iterations": iteration + 1,
+                        "reasoning_visible": False
+                    }
+                except Exception as e:
+                    # If finalization fails, use the last successful result
+                    return {
+                        "success": True,
+                        "answer": f"Based on the data retrieved: {observation[:500]}",
+                        "steps": self.steps,
+                        "iterations": iteration + 1,
+                        "reasoning_visible": False
+                    }
         
-        # Max iterations reached
-        return {
-            "success": False,
-            "error": f"Maximum iterations ({self.max_iterations}) reached without final answer",
-            "steps": self.steps,
-            "iterations": self.max_iterations
-        }
+        # Max iterations reached - ask for final answer anyway
+        try:
+            final_prompt = f"Maximum iterations reached. Please provide a final answer to: '{user_query}'. Format: FINAL_ANSWER: [your answer]"
+            final_response = chat_session.send_message(final_prompt)
+            final_answer = final_response.text.strip()
+            if "FINAL_ANSWER:" in final_answer.upper():
+                final_answer = self._extract_final_answer(final_answer) or final_answer
+            
+            return {
+                "success": True,
+                "answer": final_answer,
+                "steps": self.steps,
+                "iterations": self.max_iterations,
+                "reasoning_visible": False
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Maximum iterations ({self.max_iterations}) reached without final answer. Last error: {str(e)}",
+                "steps": self.steps,
+                "iterations": self.max_iterations
+            }
     
     def _build_system_prompt(self, rag_context: str = "") -> str:
         """Build the system prompt with tool information."""
@@ -207,47 +250,6 @@ Let's begin."""
         
         return prompt
     
-    def _build_thought_prompt(self, conversation_history: List[Dict]) -> str:
-        """Build prompt for the thought step."""
-        # Use the last few messages for context
-        recent_history = conversation_history[-3:] if len(conversation_history) > 3 else conversation_history
-        
-        prompt_parts = []
-        for msg in recent_history:
-            role = msg.get("role", "user")
-            parts = msg.get("parts", [])
-            for part in parts:
-                if role == "user":
-                    prompt_parts.append(f"User: {part}")
-                else:
-                    prompt_parts.append(f"Assistant: {part}")
-        
-        prompt_parts.append("\nWhat should I do next? Think step by step, then decide on an action.")
-        prompt_parts.append("\nFormat your response as:\nThought: [your reasoning]\nAction: tool_name(arg1=value1, ...)")
-        prompt_parts.append("\nOr if you have the final answer:\nFINAL_ANSWER: [your answer]")
-        
-        return "\n".join(prompt_parts)
-    
-    def _build_final_prompt(self, user_query: str, conversation_history: List[Dict]) -> str:
-        """Build prompt to finalize the answer."""
-        prompt = f"""Based on the following conversation, provide a clear, concise answer to the user's question.
-
-Original Question: {user_query}
-
-Conversation History:
-"""
-        for msg in conversation_history:
-            role = msg.get("role", "user")
-            parts = msg.get("parts", [])
-            for part in parts:
-                if role == "user":
-                    prompt += f"\nUser: {part}\n"
-                else:
-                    prompt += f"\nAssistant: {part}\n"
-        
-        prompt += "\n\nProvide a natural language answer that directly addresses the user's question. Be concise but informative."
-        
-        return prompt
     
     def _parse_action(self, thought_text: str) -> Optional[Dict[str, Any]]:
         """
@@ -363,7 +365,7 @@ Conversation History:
         
         return None
     
-    def _has_enough_information(self, conversation_history: List[Dict]) -> bool:
+    def _has_enough_information(self) -> bool:
         """Heuristic to check if we have enough information to answer."""
         # Simple heuristic: if we've executed at least one successful tool
         # and the last observation is not an error

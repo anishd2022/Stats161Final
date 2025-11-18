@@ -30,6 +30,17 @@ except ImportError as e:
     retrieve_relevant_context = _dummy_retrieve_relevant_context
     format_rag_context = _dummy_format_rag_context
 
+# Try importing reasoning agent system (optional - app can work without it)
+try:
+    from agent_setup import create_tool_registry, create_react_agent
+    from agents import ReActAgent
+    from tools import ToolRegistry
+    AGENT_SYSTEM_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠ Warning: Failed to import agent system: {e}")
+    print("  App will continue without reasoning agent functionality.")
+    AGENT_SYSTEM_AVAILABLE = False
+
 # Initialize Flask app
 app = Flask(__name__)
 CORS(app)
@@ -60,6 +71,10 @@ DB_PORT = int(os.getenv('DB_PORT', 3306))
 schema = None
 rag_collection = None
 model = None
+
+# Global variables for reasoning agent system
+tool_registry = None
+react_agent = None
 
 # Chat session management: session_id -> ChatSession
 chat_sessions = {}
@@ -377,9 +392,97 @@ def update_chat_title(session_id, user_query):
                 title += "..."
             chat_metadata[session_id]["title"] = title
 
-def process_query(user_query, session_id=None):
+def process_query(user_query, session_id=None, use_agent=False):
     """
     Process a single user query and return the response.
+    
+    Args:
+        user_query: User's question
+        session_id: Optional chat session ID for maintaining context
+        use_agent: If True, use ReAct reasoning agent; if False, use original direct approach
+    
+    Returns:
+        Dictionary with response details
+    """
+    # Route to agent system if requested and available
+    if use_agent and AGENT_SYSTEM_AVAILABLE and react_agent:
+        return process_query_with_agent(user_query, session_id)
+    else:
+        return process_query_direct(user_query, session_id)
+
+
+def process_query_with_agent(user_query, session_id=None):
+    """
+    Process query using the ReAct reasoning agent.
+    
+    Args:
+        user_query: User's question
+        session_id: Optional chat session ID (for metadata tracking)
+    
+    Returns:
+        Dictionary with response details
+    """
+    global react_agent, rag_collection
+    
+    if not react_agent:
+        return {
+            "success": False,
+            "error": "Reasoning agent not initialized. Please check server logs.",
+            "answer": None
+        }
+    
+    # Retrieve relevant RAG context
+    rag_context = ""
+    if rag_collection:
+        retrieved_chunks = retrieve_relevant_context(user_query, rag_collection, top_k=3)
+        if retrieved_chunks:
+            rag_context = format_rag_context(retrieved_chunks)
+    
+    # Run the agent
+    try:
+        result = react_agent.run(user_query, rag_context=rag_context)
+        
+        # Update chat metadata if session_id provided
+        if session_id:
+            if session_id not in chat_metadata:
+                chat_metadata[session_id] = {
+                    "title": "New Chat",
+                    "created_at": datetime.now().isoformat(),
+                    "message_count": 0
+                }
+            chat_metadata[session_id]["message_count"] += 1
+            update_chat_title(session_id, user_query)
+        
+        # Format response to match original format
+        if result["success"]:
+            return {
+                "success": True,
+                "answer": result["answer"],
+                "sql_queries": [],  # Agent doesn't expose SQL directly
+                "needs_sql": len(result.get("steps", [])) > 0,
+                "session_id": session_id,
+                "agent_iterations": result.get("iterations", 0),
+                "agent_steps": len(result.get("steps", []))
+            }
+        else:
+            return {
+                "success": False,
+                "error": result.get("error", "Unknown error in reasoning agent"),
+                "answer": None,
+                "session_id": session_id
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Error in reasoning agent: {str(e)}",
+            "answer": None,
+            "session_id": session_id
+        }
+
+
+def process_query_direct(user_query, session_id=None):
+    """
+    Process query using the original direct approach (backward compatible).
     
     Args:
         user_query: User's question
@@ -523,6 +626,7 @@ def query():
         data = request.get_json()
         user_query = data.get('query', '').strip()
         session_id = data.get('session_id', None)
+        use_agent = data.get('use_agent', False)  # New parameter for agent mode
         
         if not user_query:
             return jsonify({
@@ -530,8 +634,8 @@ def query():
                 "error": "No query provided"
             }), 400
         
-        # Process the query
-        result = process_query(user_query, session_id)
+        # Process the query (with or without agent based on flag)
+        result = process_query(user_query, session_id, use_agent=use_agent)
         return jsonify(result)
         
     except Exception as e:
@@ -578,8 +682,8 @@ def create_chat():
         }), 500
 
 def initialize():
-    """Initialize schema and RAG collection"""
-    global schema, rag_collection
+    """Initialize schema, RAG collection, and reasoning agent system"""
+    global schema, rag_collection, tool_registry, react_agent
     
     print("Starting application initialization...")
     
@@ -606,10 +710,20 @@ def initialize():
         rag_collection = None
     
     # Validate database connection (non-blocking)
+    db_config = None
     try:
         connection = get_db_connection()
         print("✓ Database connection established")
         connection.close()
+        
+        # Prepare db_config for agent system
+        db_config = {
+            'host': DB_HOST,
+            'user': DB_USER,
+            'password': DB_PW,
+            'database': DB_NAME,
+            'port': DB_PORT
+        }
     except Exception as e:
         print(f"⚠ Warning: Could not connect to database: {e}")
         print("  App will start, but queries will fail until database is available.")
@@ -620,6 +734,45 @@ def initialize():
         print("  App will start, but queries will fail until GOOGLE_API_KEY is set.")
     else:
         print("✓ GOOGLE_API_KEY found (model will be initialized on first use)")
+    
+    # Initialize reasoning agent system (if available)
+    if AGENT_SYSTEM_AVAILABLE and schema and db_config:
+        try:
+            # Initialize model first
+            gemini_model = get_model()
+            
+            # Create tool registry
+            tool_registry = create_tool_registry(
+                db_config=db_config,
+                rag_collection=rag_collection,
+                retrieve_func=retrieve_relevant_context,
+                format_func=format_rag_context
+            )
+            
+            # Create ReAct agent
+            react_agent = create_react_agent(
+                model=gemini_model,
+                tool_registry=tool_registry,
+                schema=schema,
+                max_iterations=10,
+                verbose=False  # Set to True for debugging
+            )
+            
+            print("✓ Reasoning agent system initialized")
+        except Exception as e:
+            print(f"⚠ Warning: Could not initialize reasoning agent system: {e}")
+            print("  App will continue with direct query approach only.")
+            tool_registry = None
+            react_agent = None
+    else:
+        if not AGENT_SYSTEM_AVAILABLE:
+            print("⚠ Reasoning agent system not available (import failed)")
+        elif not schema:
+            print("⚠ Reasoning agent system not initialized (schema not loaded)")
+        elif not db_config:
+            print("⚠ Reasoning agent system not initialized (database not available)")
+        tool_registry = None
+        react_agent = None
     
     print("✓ Application initialization complete")
 
