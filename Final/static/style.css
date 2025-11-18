@@ -306,6 +306,42 @@ header h1 {
     padding: 0;
 }
 
+.message-content table.markdown-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.message-content table.markdown-table thead {
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
+.message-content table.markdown-table th {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-primary);
+    border-bottom: 2px solid var(--border);
+}
+
+.message-content table.markdown-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+}
+
+.message-content table.markdown-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.message-content table.markdown-table tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
 .sql-queries {
     margin-top: 1rem;
     padding-top: 1rem;

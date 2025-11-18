@@ -345,8 +345,26 @@ function addMessageToContainer(type, content, isLoading = false, sqlQueriesHtml 
 }
 
 function formatContent(content) {
-    // Escape HTML first
+    // Use placeholders to preserve tables during HTML escaping
+    const tablePlaceholders = [];
+    let placeholderIndex = 0;
+    
+    // Convert markdown tables to HTML and replace with placeholders
+    content = content.replace(/(\|.+\|\r?\n\|[-\s|:]+\|\r?\n(?:\|.+\|\r?\n?)+)/g, function(match) {
+        const tableHtml = convertMarkdownTable(match);
+        const placeholder = `__TABLE_PLACEHOLDER_${placeholderIndex}__`;
+        tablePlaceholders[placeholderIndex] = tableHtml;
+        placeholderIndex++;
+        return placeholder;
+    });
+    
+    // Now escape HTML (tables are safe in placeholders)
     content = escapeHtml(content);
+    
+    // Restore tables from placeholders
+    tablePlaceholders.forEach((tableHtml, index) => {
+        content = content.replace(`__TABLE_PLACEHOLDER_${index}__`, tableHtml);
+    });
     
     // Handle code blocks
     content = content.replace(/```(\w+)?\n([\s\S]*?)```/g, function(match, lang, code) {
@@ -360,6 +378,53 @@ function formatContent(content) {
     content = content.replace(/\n/g, '<br>');
     
     return content;
+}
+
+function convertMarkdownTable(match) {
+    const lines = match.trim().split(/\r?\n/);
+    if (lines.length < 2) return match; // Need at least header and separator
+    
+    // Parse header row
+    const headerRow = lines[0];
+    const headers = headerRow.split('|').map(h => h.trim()).filter(h => h);
+    
+    if (headers.length === 0) return match; // Invalid table
+    
+    // Skip separator row (lines[1])
+    // Parse data rows
+    const dataRows = lines.slice(2).map(row => {
+        const cells = row.split('|').map(cell => cell.trim());
+        // Filter out empty cells at start/end (from leading/trailing |)
+        return cells.filter((cell, idx) => idx > 0 && idx <= headers.length);
+    }).filter(row => row.length > 0);
+    
+    // Build HTML table
+    let html = '<table class="markdown-table">';
+    
+    // Header
+    html += '<thead><tr>';
+    headers.forEach(header => {
+        html += `<th>${escapeHtml(header)}</th>`;
+    });
+    html += '</tr></thead>';
+    
+    // Body
+    if (dataRows.length > 0) {
+        html += '<tbody>';
+        dataRows.forEach(row => {
+            html += '<tr>';
+            headers.forEach((_, idx) => {
+                const cell = escapeHtml(row[idx] || '');
+                html += `<td>${cell}</td>`;
+            });
+            html += '</tr>';
+        });
+        html += '</tbody>';
+    }
+    
+    html += '</table>';
+    
+    return html;
 }
 
 function stripHtml(html) {
