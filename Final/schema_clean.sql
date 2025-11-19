@@ -37,7 +37,7 @@ CREATE TABLE ads (
     u_newsCatInterestsST JSON NOT NULL,
     u_refreshTimes TINYINT UNSIGNED NOT NULL,
     u_feedLifeCycle TINYINT UNSIGNED NOT NULL,
-    PRIMARY KEY (log_id),
+    INDEX idx_log_id (log_id),
     INDEX idx_user_id (user_id),
     INDEX idx_label (label),
     INDEX idx_pt_d (pt_d)
@@ -73,7 +73,7 @@ CREATE TABLE feeds (
     cillabel TINYINT NOT NULL,
     pro TINYINT UNSIGNED NOT NULL,
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    PRIMARY KEY (id),
+    INDEX idx_id (id),
     INDEX idx_u_userId (u_userId),
     INDEX idx_label (label),
     INDEX idx_cillabel (cillabel),

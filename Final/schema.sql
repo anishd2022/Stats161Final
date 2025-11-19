@@ -67,8 +67,8 @@ CREATE TABLE ads (
     u_refreshTimes TINYINT UNSIGNED NOT NULL,  -- Range: 0-9
     u_feedLifeCycle TINYINT UNSIGNED NOT NULL,  -- Range: 10-17
     
-    -- Primary Key
-    PRIMARY KEY (log_id),
+    -- Index on log_id (removed PRIMARY KEY to allow duplicates)
+    INDEX idx_log_id (log_id),
     
     -- Index on user_id for joins with feeds table
     INDEX idx_user_id (user_id),
@@ -129,11 +129,11 @@ CREATE TABLE feeds (
     
     -- Note: No single-column primary key identified in feeds table
     -- Using composite key or auto-increment ID would be needed for production
-    -- For now, we'll create an auto-increment primary key
+    -- For now, we'll create an auto-increment ID (removed PRIMARY KEY to allow duplicates)
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     
-    -- Primary Key (auto-increment)
-    PRIMARY KEY (id),
+    -- Index on id (removed PRIMARY KEY to allow duplicates)
+    INDEX idx_id (id),
     
     -- Index on user_id for joins with ads table
     INDEX idx_u_userId (u_userId),

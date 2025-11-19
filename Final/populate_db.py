@@ -20,11 +20,36 @@ DB_NAME = os.getenv('DB_NAME')
 DB_PORT = int(os.getenv('DB_PORT', 3306))  # Default to 3306 if not provided
 
 # Build paths to mini CSVs in Final/
-ads_path = script_dir / "ads_mini.csv"
-feeds_path = script_dir / "feeds_mini.csv"
+ads_path = script_dir / "train_data_ads.csv"
+feeds_path = script_dir / "train_data_feeds.csv"
 
+print("="*80)
+print("STARTING DATA LOADING")
+print("="*80)
+print(f"\nScript directory: {script_dir}")
+print(f"Ads CSV path: {ads_path}")
+print(f"Feeds CSV path: {feeds_path}")
+
+# Check if files exist
+if not ads_path.exists():
+    raise FileNotFoundError(f"Ads CSV file not found: {ads_path}")
+if not feeds_path.exists():
+    raise FileNotFoundError(f"Feeds CSV file not found: {feeds_path}")
+
+# Check file sizes
+ads_size = ads_path.stat().st_size / (1024 * 1024)  # Size in MB
+feeds_size = feeds_path.stat().st_size / (1024 * 1024)  # Size in MB
+print(f"\nFile sizes:")
+print(f"  Ads CSV: {ads_size:.2f} MB")
+print(f"  Feeds CSV: {feeds_size:.2f} MB")
+
+print(f"\nReading ads CSV...")
 ads = pd.read_csv(ads_path)
+print(f"✓ Ads CSV loaded: {len(ads)} rows, {len(ads.columns)} columns")
+
+print(f"\nReading feeds CSV...")
 feeds = pd.read_csv(feeds_path)
+print(f"✓ Feeds CSV loaded: {len(feeds)} rows, {len(feeds.columns)} columns")
 
 # print(ads.head())
 # print(feeds.head())
@@ -414,7 +439,7 @@ def insert_ads_data(connection, df, batch_size=1000):
     Insert ads data into database.
     
     Args:
-        connection: Database connection object (placeholder)
+        connection: Database connection object
         df: Prepared DataFrame with JSON strings for list columns
         batch_size: Number of rows to insert per batch
     """
@@ -467,7 +492,7 @@ def insert_feeds_data(connection, df, batch_size=1000):
     Insert feeds data into database.
     
     Args:
-        connection: Database connection object (placeholder)
+        connection: Database connection object
         df: Prepared DataFrame with JSON strings for list columns
         batch_size: Number of rows to insert per batch
     """
@@ -553,10 +578,10 @@ def populate_database():
         print("✓ Database connection established")
         
         print("\nInserting ads data...")
-        insert_ads_data(connection, ads_db, batch_size=1000)
+        insert_ads_data(connection, ads_db, batch_size=100000)
         
         print("\nInserting feeds data...")
-        insert_feeds_data(connection, feeds_db, batch_size=1000)
+        insert_feeds_data(connection, feeds_db, batch_size=100000)
         
         print("\n" + "="*80)
         print("DATABASE POPULATION COMPLETE")
