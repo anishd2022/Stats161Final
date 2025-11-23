@@ -121,7 +121,7 @@ function switchToChat(sessionId) {
     // Load messages for this session if they exist
     if (chatMessages[sessionId] && chatMessages[sessionId].length > 0) {
         chatMessages[sessionId].forEach(msg => {
-            addMessageToContainer(msg.type, msg.content, false, msg.sqlQueriesHtml);
+            addMessageToContainer(msg.type, msg.content, false, msg.sqlQueriesHtml, msg.tableData);
         });
     } else {
         // Show welcome message if no messages
@@ -251,17 +251,23 @@ function sendMessageWithSession(query) {
             let sqlQueriesHtml = null;
             if (data.needs_sql && data.sql_queries && data.sql_queries.length > 0) {
                 sqlQueriesHtml = formatSqlQueries(data.sql_queries);
-                // Add as a separate part to be handled correctly
-                addMessage('bot', content, false, sqlQueriesHtml);
-            } else {
-                addMessage('bot', content);
             }
+            
+            // Get table data if available
+            let tableData = null;
+            if (data.table_data && data.table_data.length > 0) {
+                tableData = data.table_data;
+            }
+            
+            // Add message with table data
+            addMessage('bot', content, false, sqlQueriesHtml, tableData);
             
             // Store bot message
             chatMessages[currentSessionId].push({
                 type: 'bot',
                 content: content,
-                sqlQueriesHtml: sqlQueriesHtml
+                sqlQueriesHtml: sqlQueriesHtml,
+                tableData: tableData
             });
             
             // Reload chat list to update titles
@@ -296,11 +302,133 @@ function sendMessageWithSession(query) {
     });
 }
 
-function addMessage(type, content, isLoading = false, sqlQueriesHtml = null) {
-    return addMessageToContainer(type, content, isLoading, sqlQueriesHtml);
+// Threshold for displaying tables (if more rows, only show download button)
+const TABLE_DISPLAY_THRESHOLD = 100;
+
+function renderTableData(tableDataArray) {
+    let html = '';
+    const timestamp = Date.now();
+    
+    // Store table data globally for download access
+    if (!window.tableDataCache) {
+        window.tableDataCache = {};
+    }
+    
+    tableDataArray.forEach((tableData, tableIndex) => {
+        const { columns, data, row_count } = tableData;
+        
+        if (!columns || columns.length === 0 || !data || data.length === 0) {
+            return; // Skip empty tables
+        }
+        
+        const shouldDisplayTable = row_count <= TABLE_DISPLAY_THRESHOLD;
+        const tableId = `table-${timestamp}-${tableIndex}`;
+        
+        // Store table data for download access
+        window.tableDataCache[tableId] = { columns, data, row_count };
+        
+        html += '<div class="data-table-container">';
+        
+        // Display table if small enough
+        if (shouldDisplayTable) {
+            html += '<div class="data-table-wrapper">';
+            html += '<table class="data-table">';
+            
+            // Header
+            html += '<thead><tr>';
+            columns.forEach(col => {
+                html += `<th>${escapeHtml(String(col))}</th>`;
+            });
+            html += '</tr></thead>';
+            
+            // Body
+            html += '<tbody>';
+            data.forEach(row => {
+                html += '<tr>';
+                columns.forEach(col => {
+                    const value = row[col] !== undefined && row[col] !== null ? String(row[col]) : '';
+                    html += `<td>${escapeHtml(value)}</td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody>';
+            
+            html += '</table>';
+            html += '</div>';
+        } else {
+            // For large tables, show a message instead of the table
+            html += `<div class="table-info-message">Table contains ${row_count} rows (too large to display)</div>`;
+        }
+        
+        // Download CSV button (always shown)
+        html += `<div class="table-actions">`;
+        html += `<button class="download-csv-btn" onclick="downloadTableAsCSV('${tableId}')">`;
+        html += `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">`;
+        html += `<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>`;
+        html += `<polyline points="7 10 12 15 17 10"></polyline>`;
+        html += `<line x1="12" y1="15" x2="12" y2="3"></line>`;
+        html += `</svg>`;
+        html += `Download CSV (${row_count} rows)`;
+        html += `</button>`;
+        html += `</div>`;
+        
+        html += '</div>'; // Close data-table-container
+    });
+    
+    return html;
 }
 
-function addMessageToContainer(type, content, isLoading = false, sqlQueriesHtml = null) {
+// Make downloadTableAsCSV globally accessible
+window.downloadTableAsCSV = function(tableId) {
+    const tableData = window.tableDataCache && window.tableDataCache[tableId];
+    if (!tableData) {
+        console.error('Table data not found for download');
+        return;
+    }
+    
+    const { columns, data } = tableData;
+    
+    // Create CSV content
+    let csvContent = '';
+    
+    // Header row
+    csvContent += columns.map(col => escapeCSVValue(String(col))).join(',') + '\n';
+    
+    // Data rows
+    data.forEach(row => {
+        const rowValues = columns.map(col => {
+            const value = row[col] !== undefined && row[col] !== null ? String(row[col]) : '';
+            return escapeCSVValue(value);
+        });
+        csvContent += rowValues.join(',') + '\n';
+    });
+    
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `table_data_${Date.now()}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+};
+
+function escapeCSVValue(value) {
+    // If value contains comma, quote, or newline, wrap in quotes and escape quotes
+    if (value.includes(',') || value.includes('"') || value.includes('\n') || value.includes('\r')) {
+        return '"' + value.replace(/"/g, '""') + '"';
+    }
+    return value;
+}
+
+function addMessage(type, content, isLoading = false, sqlQueriesHtml = null, tableData = null) {
+    return addMessageToContainer(type, content, isLoading, sqlQueriesHtml, tableData);
+}
+
+function addMessageToContainer(type, content, isLoading = false, sqlQueriesHtml = null, tableData = null) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${type}`;
     
@@ -325,9 +453,17 @@ function addMessageToContainer(type, content, isLoading = false, sqlQueriesHtml 
     const icon = type === 'user' ? '👤' : type === 'error' ? '⚠️' : '🤖';
     const header = type === 'user' ? 'You' : type === 'error' ? 'Error' : 'Assistant';
     
-    let contentHtml = formatContent(content);
+    // If we have table_data, skip markdown table rendering in text to avoid duplicates
+    const skipMarkdownTables = tableData && tableData.length > 0;
+    let contentHtml = formatContent(content, skipMarkdownTables);
     if (sqlQueriesHtml) {
         contentHtml += sqlQueriesHtml;
+    }
+    
+    // Add table data rendering if available
+    let tableHtml = '';
+    if (tableData && tableData.length > 0) {
+        tableHtml = renderTableData(tableData);
     }
     
     messageDiv.innerHTML = `
@@ -335,7 +471,7 @@ function addMessageToContainer(type, content, isLoading = false, sqlQueriesHtml 
             <span class="icon">${icon}</span>
             <span>${header}</span>
         </div>
-        <div class="message-content">${contentHtml}</div>
+        <div class="message-content">${contentHtml}${tableHtml}</div>
     `;
     
     chatContainer.appendChild(messageDiv);
@@ -344,27 +480,35 @@ function addMessageToContainer(type, content, isLoading = false, sqlQueriesHtml 
     return messageDiv.id;
 }
 
-function formatContent(content) {
+function formatContent(content, skipMarkdownTables = false) {
     // Use placeholders to preserve tables during HTML escaping
     const tablePlaceholders = [];
     let placeholderIndex = 0;
     
     // Convert markdown tables to HTML and replace with placeholders
+    // If skipMarkdownTables is true, remove markdown tables instead of converting them
     content = content.replace(/(\|.+\|\r?\n\|[-\s|:]+\|\r?\n(?:\|.+\|\r?\n?)+)/g, function(match) {
-        const tableHtml = convertMarkdownTable(match);
-        const placeholder = `__TABLE_PLACEHOLDER_${placeholderIndex}__`;
-        tablePlaceholders[placeholderIndex] = tableHtml;
-        placeholderIndex++;
-        return placeholder;
+        if (skipMarkdownTables) {
+            // Remove markdown tables when we have table_data to avoid duplicates
+            return '';
+        } else {
+            const tableHtml = convertMarkdownTable(match);
+            const placeholder = `__TABLE_PLACEHOLDER_${placeholderIndex}__`;
+            tablePlaceholders[placeholderIndex] = tableHtml;
+            placeholderIndex++;
+            return placeholder;
+        }
     });
     
     // Now escape HTML (tables are safe in placeholders)
     content = escapeHtml(content);
     
-    // Restore tables from placeholders
-    tablePlaceholders.forEach((tableHtml, index) => {
-        content = content.replace(`__TABLE_PLACEHOLDER_${index}__`, tableHtml);
-    });
+    // Restore tables from placeholders (only if we didn't skip them)
+    if (!skipMarkdownTables) {
+        tablePlaceholders.forEach((tableHtml, index) => {
+            content = content.replace(`__TABLE_PLACEHOLDER_${index}__`, tableHtml);
+        });
+    }
     
     // Handle code blocks
     content = content.replace(/```(\w+)?\n([\s\S]*?)```/g, function(match, lang, code) {

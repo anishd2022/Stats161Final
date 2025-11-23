@@ -241,6 +241,25 @@ def execute_sql_query(connection, sql_query):
     finally:
         cursor.close()
 
+def dataframe_to_json(df):
+    """Convert a DataFrame to a JSON-serializable format for frontend"""
+    if isinstance(df, pd.DataFrame):
+        if df.empty:
+            return {
+                "columns": [],
+                "data": [],
+                "row_count": 0
+            }
+        # Convert DataFrame to dict with proper handling of NaN and other types
+        # Use records orientation for easier frontend processing
+        df_clean = df.fillna('')  # Replace NaN with empty strings
+        return {
+            "columns": df.columns.tolist(),
+            "data": df_clean.to_dict('records'),  # List of dicts, one per row
+            "row_count": len(df)
+        }
+    return None
+
 def format_results_as_text(results, max_rows=100):
     """Convert query results to a text format for LLM processing."""
     if isinstance(results, pd.DataFrame):
@@ -481,17 +500,31 @@ def process_query(user_query, session_id=None):
                 user_query, sql_queries, all_results, rag_context, chat_session, is_first_message
             )
             
+            # Extract DataFrame results for table display/download
+            table_data = []
+            for sql_query, results in all_results:
+                if isinstance(results, pd.DataFrame):
+                    table_json = dataframe_to_json(results)
+                    if table_json:
+                        table_data.append(table_json)
+            
             # Update chat metadata
             chat_metadata[session_id]["message_count"] += 1
             update_chat_title(session_id, user_query)
             
-            return {
+            response = {
                 "success": True,
                 "answer": natural_language_response,
                 "sql_queries": executed_queries,
                 "needs_sql": True,
                 "session_id": session_id
             }
+            
+            # Include table data if available (for CSV download and display)
+            if table_data:
+                response["table_data"] = table_data
+            
+            return response
         else:
             return {
                 "success": False,
