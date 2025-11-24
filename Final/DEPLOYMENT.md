@@ -19,10 +19,13 @@ Your code already mentions Render! This is the best option.
 3. Create a new **Web Service**
 4. Configure:
    - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `gunicorn --bind 0.0.0.0:$PORT app:app`
+   - **Start Command**: `gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --access-logfile - --error-logfile - --log-level info app:app`
+     - This matches your `Procfile` - you can copy this exact command
    - **Environment**: Python 3
-   
-   **Note**: The Procfile already has the correct command, so you can leave Start Command empty (it will use Procfile) or set it to match.
+   - **Python Version**: Should auto-detect `3.11.9` from `runtime.txt`
+     - If it shows Python 3.13 or different version, go to Settings → Environment
+     - Add environment variable: `PYTHON_VERSION=3.11.9`
+     - Or manually select Python 3.11 in the dropdown
 5. Add environment variables in Render dashboard:
    - `GOOGLE_API_KEY`
    - `DB_HOST`
@@ -38,6 +41,7 @@ Your code already mentions Render! This is the best option.
 - Automatic HTTPS
 - Environment variable management
 - Your code already references it
+- App available on https://ragtesting-lwio.onrender.com/
 
 **Cons:**
 - Free tier spins down after inactivity (15 min)
