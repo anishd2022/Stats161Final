@@ -152,9 +152,15 @@ Before deploying, ensure you have:
 4. **Configure**:
    - Name: `your-app-name`
    - Environment: `Python 3`
+   - **Python Version**: Set to `3.11.9` (important! See runtime.txt)
    - Build Command: `pip install -r requirements.txt`
    - Start Command: `gunicorn app:app`
    - Plan: Free (or paid for better performance)
+   
+   **Important**: Render should auto-detect Python 3.11.9 from `runtime.txt`, but if it doesn't:
+   - Go to Settings → Environment
+   - Add environment variable: `PYTHON_VERSION=3.11.9`
+   - Or manually select Python 3.11 in the Environment dropdown
 
 5. **Add Environment Variables**:
    - Go to Environment tab
@@ -192,6 +198,19 @@ Netlify would require:
 ---
 
 ## 🆘 Troubleshooting
+
+### Build Failures
+
+**scipy/numpy build errors:**
+- ✅ **FIXED**: scipy has been removed from requirements.txt (it's optional)
+- ✅ **FIXED**: Python version pinned to 3.11.9 in `runtime.txt`
+- If you see Fortran compiler errors, scipy is trying to build from source
+- Solution: scipy is optional - the app works without it
+
+**Python version issues:**
+- Ensure `runtime.txt` specifies `python-3.11.9`
+- Render should auto-detect this, but you can also set it in dashboard
+- Python 3.13 has compatibility issues with some packages
 
 **App won't start:**
 - Check logs in platform dashboard
