@@ -331,7 +331,7 @@ def extract_sql_from_response(response_text):
     Extract SQL queries, synthetic data request, or direct answer from Gemini's response.
     
     Returns:
-        Tuple (response_type, sql_queries_list, direct_answer, synthetic_params)
+        Tuple (response_type, sql_queries_list, direct_answer, synthetic_params, chart_config)
         response_type: 'sql', 'synthetic', 'direct', or 'unknown'
     """
     response_text = response_text.strip()
@@ -353,12 +353,40 @@ def extract_sql_from_response(response_text):
         # Validate n_rows
         n_rows = min(max(n_rows, 1), 10000)
         
-        return ('synthetic', [], None, {'table_name': table_name, 'n_rows': n_rows})
+        return ('synthetic', [], None, {'table_name': table_name, 'n_rows': n_rows}, None)
+    
+    
+    # Check if a chart is needed
+    if "CHART_NEEDED:" in response_text:
+        try:
+            # Extract JSON from the CHART_NEEDED block
+            chart_json_str = response_text.split("CHART_NEEDED:", 1)[1].strip()
+            # If there is subsequent text, split it off (assuming chart block ends with strict JSON closing)
+            # A simple heuristic: find the last '}'
+            last_brace = chart_json_str.rfind('}')
+            if last_brace != -1:
+                chart_json_str = chart_json_str[:last_brace+1]
+            
+            # Clean up markdown code blocks if present in the chart JSON
+            if chart_json_str.startswith("```"):
+                lines = chart_json_str.split("\n")
+                if lines and lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines and lines[-1].strip() == "```":
+                    lines = lines[:-1]
+                chart_json_str = "\n".join(lines)
+            
+            chart_config = json.loads(chart_json_str)
+            return ('direct', [], response_text.split("CHART_NEEDED:")[0].strip(), None, chart_config)
+        except Exception as e:
+            print(f"Error parsing chart JSON: {e}")
+            # Fallback to direct text if chart parsing fails
+            return ('direct', [], response_text.replace("CHART_NEEDED:", "").strip(), None, None)
     
     # Check if SQL is needed
     if response_text.startswith("NO_SQL_NEEDED:"):
         direct_answer = response_text.replace("NO_SQL_NEEDED:", "").strip()
-        return ('direct', [], direct_answer, None)
+        return ('direct', [], direct_answer, None, None)
     
     if response_text.startswith("SQL_NEEDED:"):
         sql_text = response_text.replace("SQL_NEEDED:", "").strip()
@@ -383,7 +411,7 @@ def extract_sql_from_response(response_text):
     if len(queries) == 1 and "\n\n" in queries[0]:
         queries = [q.strip() for q in queries[0].split("\n\n") if q.strip()]
     
-    return ('sql', queries, None, None)
+    return ('sql', queries, None, None, None)
 
 def get_db_connection():
     """Establish a connection to the MySQL database"""
@@ -466,6 +494,7 @@ def generate_combined_natural_language_response(
     math_focus=False
 ):
     """Generate a combined natural language explanation of all query results using Gemini."""
+    
     # Format all SQL queries as context
     if len(all_sql_queries) > 1:
         all_queries_text = "\n\n".join([f"Query {i+1}:\n{q}" for i, q in enumerate(all_sql_queries)])
@@ -547,6 +576,74 @@ Provide a clear, concise natural language explanation answering the user's quest
             return response.text.strip()
     except Exception as e:
         return f"Error generating natural language response: {e}"
+
+def generate_chart_config(user_query, all_results):
+    """
+    Generate a Chart.js configuration if the user requested a chart and data is available.
+    Returns: JSON dict or None
+    """
+    # Quick check if a chart was requested
+    chart_keywords = ["plot", "chart", "graph", "visualize", "visualization", "histogram", "scatter"]
+    if not any(keyword in user_query.lower() for keyword in chart_keywords):
+        return None
+        
+    # Format data for the prompt
+    data_preview = ""
+    if all_results:
+        # Just use the first result that has data
+        for sql, res in all_results:
+            if isinstance(res, pd.DataFrame) and not res.empty:
+                data_preview = res.head(20).to_string()
+                break
+    
+    if not data_preview:
+        return None
+
+    prompt = f"""You are a data visualization assistant.
+User Request: "{user_query}"
+Data available (first 20 rows):
+{data_preview}
+
+Task: Create a Chart.js (version 3+) configuration JSON to visualize this data based on the user's request.
+1. If the data is suitable for the requested chart (bar, line, pie, scatter, etc.), output ONLY the valid JSON object.
+2. If the data cannot be visualized or no chart was explicitly requested, output "NO_CHART".
+
+JSON Structure:
+{{
+  "type": "bar",
+  "data": {{
+    "labels": ["A", "B"],
+    "datasets": [{{ "label": "Metric", "data": [10, 20], "backgroundColor": "rgba(75, 192, 192, 0.6)" }}]
+  }},
+  "options": {{ "plugins": {{ "title": {{ "display": true, "text": "Title" }} }} }}
+}}
+
+Return ONLY the raw JSON. No markdown, no backticks, no explanations."""
+
+    try:
+        gemini_model = get_model()
+        # Use a low temperature for valid JSON
+        response = gemini_model.generate_content(
+            prompt, 
+            generation_config=genai.types.GenerationConfig(temperature=0.0)
+        )
+        text = response.text.strip()
+        
+        if "NO_CHART" in text:
+            return None
+            
+        # Cleanup markdown
+        if text.startswith("```"):
+            lines = text.split("\n")
+            if lines[0].startswith("```"): lines = lines[1:]
+            if lines[-1] == "```": lines = lines[:-1]
+            text = "\n".join(lines)
+            
+        return json.loads(text)
+    except Exception as e:
+        print(f"Chart generation failed: {e}")
+        return None
+
 
 def create_new_chat():
     """Create a new chat session and return its ID."""
@@ -643,7 +740,7 @@ def process_query(user_query, session_id=None):
             response = chat_session.send_message(prompt)
         
         # Extract response type and content
-        response_type, sql_queries, direct_answer, synthetic_params = extract_sql_from_response(response.text)
+        response_type, sql_queries, direct_answer, synthetic_params, chart_config = extract_sql_from_response(response.text)
         
         # Fallback: Only use detection function if LLM response is unclear (not 'direct' or 'sql')
         # This prevents overriding correct answers to questions about the process
@@ -753,7 +850,8 @@ def process_query(user_query, session_id=None):
                 "answer": direct_answer,
                 "sql_queries": [],
                 "needs_sql": False,
-                "session_id": session_id
+                "session_id": session_id,
+                "chart_config": chart_config
             }
         
         # Handle SQL queries
@@ -791,6 +889,7 @@ def process_query(user_query, session_id=None):
         
         # Generate combined natural language response for all results
         if all_results:
+            # 1. Generate text response (using chat session context)
             natural_language_response = generate_combined_natural_language_response(
                 user_query,
                 sql_queries,
@@ -800,6 +899,12 @@ def process_query(user_query, session_id=None):
                 is_first_message,
                 math_focus=bool(math_guidance)
             )
+
+            # 2. Generate chart config (independent step, fresh context)
+            # This avoids polluting the chat history with JSON and ensures the model focuses only on the chart structure
+            chart_config = generate_chart_config(user_query, all_results)
+            
+            final_answer = natural_language_response
             
             # Extract DataFrame results for table display/download
             table_data = []
@@ -815,10 +920,11 @@ def process_query(user_query, session_id=None):
             
             response = {
                 "success": True,
-                "answer": natural_language_response,
+                "answer": final_answer,
                 "sql_queries": executed_queries,
                 "needs_sql": True,
-                "session_id": session_id
+                "session_id": session_id,
+                "chart_config": chart_config
             }
             
             # Include table data if available (for CSV download and display)

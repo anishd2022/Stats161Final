@@ -259,15 +259,22 @@ function sendMessageWithSession(query) {
                 tableData = data.table_data;
             }
             
-            // Add message with table data
-            addMessage('bot', content, false, sqlQueriesHtml, tableData);
+            // Get chart config if available
+            let chartConfig = null;
+            if (data.chart_config) {
+                chartConfig = data.chart_config;
+            }
+            
+            // Add message with table data and chart
+            addMessage('bot', content, false, sqlQueriesHtml, tableData, chartConfig);
             
             // Store bot message
             chatMessages[currentSessionId].push({
                 type: 'bot',
                 content: content,
                 sqlQueriesHtml: sqlQueriesHtml,
-                tableData: tableData
+                tableData: tableData,
+                chartConfig: chartConfig
             });
             
             // Reload chat list to update titles
@@ -424,11 +431,11 @@ function escapeCSVValue(value) {
     return value;
 }
 
-function addMessage(type, content, isLoading = false, sqlQueriesHtml = null, tableData = null) {
-    return addMessageToContainer(type, content, isLoading, sqlQueriesHtml, tableData);
+function addMessage(type, content, isLoading = false, sqlQueriesHtml = null, tableData = null, chartConfig = null) {
+    return addMessageToContainer(type, content, isLoading, sqlQueriesHtml, tableData, chartConfig);
 }
 
-function addMessageToContainer(type, content, isLoading = false, sqlQueriesHtml = null, tableData = null) {
+function addMessageToContainer(type, content, isLoading = false, sqlQueriesHtml = null, tableData = null, chartConfig = null) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${type}`;
     
@@ -450,6 +457,10 @@ function addMessageToContainer(type, content, isLoading = false, sqlQueriesHtml 
         return uniqueId;
     }
     
+    // Add unique ID for normal messages
+    const messageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    messageDiv.id = messageId;
+    
     const icon = type === 'user' ? '👤' : type === 'error' ? '⚠️' : '🤖';
     const header = type === 'user' ? 'You' : type === 'error' ? 'Error' : 'Assistant';
     
@@ -458,6 +469,18 @@ function addMessageToContainer(type, content, isLoading = false, sqlQueriesHtml 
     let contentHtml = formatContent(content, skipMarkdownTables);
     if (sqlQueriesHtml) {
         contentHtml += sqlQueriesHtml;
+    }
+    
+    // Add chart rendering if available
+    let chartHtml = '';
+    if (chartConfig) {
+        const chartId = `chart-${messageId}`;
+        // Increased margin-bottom from 20px to 40px for better separation
+        chartHtml = `<div class="chart-container-wrapper" style="position: relative; height: 300px; width: 100%; margin: 20px 0 40px 0;">
+                        <canvas id="${chartId}"></canvas>
+                     </div>`;
+        // Store chart config to render after DOM update
+        setTimeout(() => renderChart(chartId, chartConfig), 100);
     }
     
     // Add table data rendering if available
@@ -471,13 +494,83 @@ function addMessageToContainer(type, content, isLoading = false, sqlQueriesHtml 
             <span class="icon">${icon}</span>
             <span>${header}</span>
         </div>
-        <div class="message-content">${contentHtml}${tableHtml}</div>
+        <div class="message-content">${contentHtml}${chartHtml}${tableHtml}</div>
     `;
     
     chatContainer.appendChild(messageDiv);
     scrollToBottom();
     
     return messageDiv.id;
+}
+
+function renderChart(canvasId, config) {
+    try {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        // Ensure the config is valid and safe
+        if (!config || !config.type || !config.data) {
+            console.error("Invalid chart config:", config);
+            return;
+        }
+        // Basic responsiveness
+        config.options = config.options || {};
+        config.options.responsive = true;
+        config.options.maintainAspectRatio = false;
+        
+        // --- THEME CUSTOMIZATION FOR DARK MODE ---
+        // Set default font color to white/light grey for visibility
+        Chart.defaults.color = '#e0e0e0';
+        Chart.defaults.borderColor = '#404040'; // Grid lines
+        
+        // Ensure plugins exist
+        config.options.plugins = config.options.plugins || {};
+        
+        // Legend text color
+        if (!config.options.plugins.legend) config.options.plugins.legend = {};
+        if (!config.options.plugins.legend.labels) config.options.plugins.legend.labels = {};
+        config.options.plugins.legend.labels.color = '#ffffff';
+        
+        // Title text color
+        if (config.options.plugins.title) {
+            config.options.plugins.title.color = '#ffffff';
+            config.options.plugins.title.font = { size: 16, weight: 'bold' };
+        }
+        
+        // Axis customization (Scales)
+        config.options.scales = config.options.scales || {};
+        const axes = ['x', 'y'];
+        axes.forEach(axis => {
+            if (!config.options.scales[axis]) config.options.scales[axis] = {};
+            
+            // Ticks (labels on axis)
+            if (!config.options.scales[axis].ticks) config.options.scales[axis].ticks = {};
+            config.options.scales[axis].ticks.color = '#e0e0e0';
+            
+            // Grid lines
+            if (!config.options.scales[axis].grid) config.options.scales[axis].grid = {};
+            config.options.scales[axis].grid.color = 'rgba(255, 255, 255, 0.1)';
+            
+            // Axis Titles
+            if (config.options.scales[axis].title) {
+                config.options.scales[axis].title.color = '#ffffff';
+            }
+        });
+        
+        // Brighten up the dataset colors if they are default
+        if (config.data.datasets) {
+            config.data.datasets.forEach(dataset => {
+                // If it looks like the default muted teal, replace with a brighter cyan/blue
+                if (dataset.backgroundColor === "rgba(75, 192, 192, 0.2)" || dataset.backgroundColor === "rgba(75, 192, 192, 0.6)") {
+                    dataset.backgroundColor = "rgba(56, 189, 248, 0.6)"; // Sky blue
+                    dataset.borderColor = "rgba(56, 189, 248, 1)";
+                }
+            });
+        }
+        // -----------------------------------------
+        
+        new Chart(ctx, config);
+    } catch (e) {
+        console.error("Error rendering chart:", e);
+    }
 }
 
 function formatContent(content, skipMarkdownTables = false) {
