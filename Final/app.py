@@ -184,13 +184,66 @@ def detect_synthetic_data_request(user_query: str) -> Optional[Dict[str, Any]]:
         'n_rows': n_rows
     }
 
-def create_full_sql_prompt(schema, user_query, rag_context=""):
+MATH_KEYWORDS = [
+    "statistical test",
+    "significant",
+    "significance",
+    "hypothesis test",
+    "p-value",
+    "p value",
+    "ratio",
+    "percentage",
+    "percent",
+    "average",
+    "median",
+    "mean",
+    "variance",
+    "standard deviation",
+    "compare",
+    "difference",
+    "correlation",
+    "regression",
+    "trend",
+    "distribution",
+    "math",
+    "calculate",
+    "calculation",
+    "estimate",
+    "probability"
+]
+
+def detect_math_intensive_request(user_query: str) -> Optional[str]:
+    """
+    Detect if the user query likely requires multi-step reasoning
+    (SQL data retrieval followed by mathematical/statistical analysis).
+    
+    Returns an instruction string for the LLM if math-heavy, else None.
+    """
+    text = user_query.lower()
+    if not any(keyword in text for keyword in MATH_KEYWORDS):
+        return None
+    
+    return (
+        "IMPORTANT: This question requires mathematical or statistical reasoning. "
+        "Identify the base metrics you need, generate SQL to retrieve them, and "
+        "treat the request as SQL_NEEDED even if additional analysis is required. "
+        "Assume you'll be given the SQL results afterward so you can perform the "
+        "necessary calculations yourself."
+    )
+
+def create_full_sql_prompt(schema, user_query, rag_context="", extra_instructions=""):
     """Create the full prompt for the first message in a chat session."""
     rag_section = ""
     if rag_context:
         rag_section = f"""
 Additional Context from Documentation:
 {rag_context}
+"""
+    guidance_section = ""
+    if extra_instructions:
+        guidance_section = f"""
+Additional Guidance:
+{extra_instructions}
 """
     
     prompt = f"""You are a helpful database assistant. A user has asked a question about a database. Your task is to determine the type of request and respond appropriately.
@@ -241,17 +294,20 @@ Instructions:
    - Provide a clear, helpful answer based on the schema and documentation
    - Start your response with "NO_SQL_NEEDED:" followed by your answer
 
-Remember: Only use SQL when absolutely necessary. If the question can be answered from the schema or documentation alone, provide a direct answer instead."""
+Remember: Only use SQL when absolutely necessary. If the question can be answered from the schema or documentation alone, provide a direct answer instead.{guidance_section}"""
     
     return prompt
 
-def create_short_sql_prompt(user_query, rag_context=""):
+def create_short_sql_prompt(user_query, rag_context="", extra_instructions=""):
     """Create a short prompt for subsequent messages in a chat session (context already exists)."""
     rag_section = ""
     if rag_context:
         rag_section = f"\nAdditional Context from Documentation:\n{rag_context}\n"
+    guidance_section = ""
+    if extra_instructions:
+        guidance_section = f"\nAdditional Guidance:\n{extra_instructions}\n"
     
-    prompt = f"""User Question: {user_query}{rag_section}
+    prompt = f"""User Question: {user_query}{rag_section}{guidance_section}
 
 Follow the same process as before: 
 - If explicitly requesting to GENERATE/CREATE synthetic data (with action verbs), respond with "SYNTHETIC_DATA_NEEDED: table_name=X, n_rows=Y"
@@ -393,7 +449,15 @@ def format_results_as_text(results, max_rows=100):
     else:
         return str(results)
 
-def generate_combined_natural_language_response(user_query, all_sql_queries, all_results, rag_context="", chat_session=None, is_first_message=False):
+def generate_combined_natural_language_response(
+    user_query,
+    all_sql_queries,
+    all_results,
+    rag_context="",
+    chat_session=None,
+    is_first_message=False,
+    math_focus=False
+):
     """Generate a combined natural language explanation of all query results using Gemini."""
     # Format all SQL queries as context
     if len(all_sql_queries) > 1:
@@ -425,6 +489,14 @@ Additional Context from Documentation:
 """
     
     # Create prompt for natural language formatting
+    math_instruction = ""
+    if math_focus:
+        math_instruction = (
+            "\nIMPORTANT: Perform any needed mathematical/statistical calculations "
+            "using the data above (e.g., compute percentages, differences, test statistics). "
+            "Show key numbers so the user can see how you derived the answer."
+        )
+    
     if is_first_message:
         prompt = f"""You are a data analyst assistant. A user asked a question about a database, and we executed SQL query(ies) to get the results. 
 
@@ -434,7 +506,7 @@ Original User Question: {user_query}
 Query Results:
 {all_results_text}
 
-Please provide a clear, concise, and easy-to-understand natural language explanation that answers the user's original question. Use the documentation context to provide richer explanations about variables, data structure, or domain knowledge when relevant. Combine all the results into one unified response. Keep the response brief but informative. If there are specific numbers, values, or patterns in the results, highlight them. If no results were returned, explain what that means in the context of the question. Focus on providing a single, cohesive answer that addresses the user's question directly.
+Please provide a clear, concise, and easy-to-understand natural language explanation that answers the user's original question. Use the documentation context to provide richer explanations about variables, data structure, or domain knowledge when relevant. Combine all the results into one unified response. Keep the response brief but informative. If there are specific numbers, values, or patterns in the results, highlight them. If no results were returned, explain what that means in the context of the question. Focus on providing a single, cohesive answer that addresses the user's question directly.{math_instruction}
 
 For recommendation-style queries (e.g., "generate ads", "recommend ads", "what ads should we show"):
 - Present the recommended items as a clear list if specific items are returned
@@ -454,7 +526,7 @@ SQL Queries Executed:
 Query Results:
 {all_results_text}
 
-Provide a clear, concise natural language explanation answering the user's question. Use the same formatting guidelines as before."""
+Provide a clear, concise natural language explanation answering the user's question. Use the same formatting guidelines as before.{math_instruction}"""
     
     try:
         if chat_session:
@@ -539,6 +611,9 @@ def process_query(user_query, session_id=None):
         # Check if this is the first message in the chat
         is_first_message = chat_metadata[session_id]["message_count"] == 0
         
+        # Detect if extra math guidance is needed
+        math_guidance = detect_math_intensive_request(user_query)
+        
         # Retrieve relevant RAG context
         rag_context = ""
         if rag_collection:
@@ -548,9 +623,9 @@ def process_query(user_query, session_id=None):
         
         # Create the prompt - full for first message, short for subsequent
         if is_first_message:
-            prompt = create_full_sql_prompt(schema, user_query, rag_context)
+            prompt = create_full_sql_prompt(schema, user_query, rag_context, math_guidance or "")
         else:
-            prompt = create_short_sql_prompt(user_query, rag_context)
+            prompt = create_short_sql_prompt(user_query, rag_context, math_guidance or "")
         
         # Generate response from Gemini using chat session
         if is_first_message:
@@ -710,7 +785,13 @@ def process_query(user_query, session_id=None):
         # Generate combined natural language response for all results
         if all_results:
             natural_language_response = generate_combined_natural_language_response(
-                user_query, sql_queries, all_results, rag_context, chat_session, is_first_message
+                user_query,
+                sql_queries,
+                all_results,
+                rag_context,
+                chat_session,
+                is_first_message,
+                math_focus=bool(math_guidance)
             )
             
             # Extract DataFrame results for table display/download
