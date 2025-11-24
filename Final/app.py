@@ -93,7 +93,9 @@ def get_model():
     try:
         genai.configure(api_key=GOOGLE_API_KEY)
         MODEL_NAME = 'gemini-2.5-flash'
-        model = genai.GenerativeModel(MODEL_NAME)
+        # Set temperature to 0.1 for more deterministic responses (better for SQL generation)
+        generation_config = genai.types.GenerationConfig(temperature=0.3)
+        model = genai.GenerativeModel(MODEL_NAME, generation_config=generation_config)
         return model
     except Exception as e:
         raise ValueError(f"Failed to initialize Gemini model: {e}")
@@ -274,6 +276,7 @@ Instructions:
    - "What process do you use to generate synthetic data?" / "How do you generate synthetic data?" = NO_SQL_NEEDED (explaining the process)
    - "Recommend ads" / "Suggest ads" / "What ads should I show" = SQL_NEEDED (finding existing similar ads)
    - "Generate ads user X will click" (when asking for recommendations) = SQL_NEEDED (finding similar existing ads)
+   - "Randomly sample 100 rows" / "Calculate mean of sample" = SQL_NEEDED (use subquery for sampling first)
 
 2. If SYNTHETIC_DATA_NEEDED:
    - Start your response with "SYNTHETIC_DATA_NEEDED:"
@@ -289,6 +292,9 @@ Instructions:
    - Only return the SQL query(ies), without any additional explanation or markdown formatting
    - Do not include code blocks (```sql or ```) around the query
    - Start your response with "SQL_NEEDED:" followed by the query(ies)
+   - **CRITICAL FOR SAMPLING**: If the user asks for a random sample to perform calculations on (e.g., "sample 100 rows and calculate mean"), you MUST use a subquery. 
+     INCORRECT: SELECT AVG(col) FROM table ORDER BY RAND() LIMIT 100 (aggregates whole table first)
+     CORRECT: SELECT AVG(col) FROM (SELECT col FROM table ORDER BY RAND() LIMIT 100) as sample
 
 4. If NO_SQL_NEEDED:
    - Provide a clear, helpful answer based on the schema and documentation
@@ -313,6 +319,7 @@ Follow the same process as before:
 - If explicitly requesting to GENERATE/CREATE synthetic data (with action verbs), respond with "SYNTHETIC_DATA_NEEDED: table_name=X, n_rows=Y"
 - If asking ABOUT synthetic data generation (questions like "what process", "how does it work"), respond with "NO_SQL_NEEDED:" and explain the process
 - If SQL is needed, respond with "SQL_NEEDED:" followed by the query(ies)
+  * REMINDER: For sampling tasks ("sample X rows then..."), use a subquery: SELECT ... FROM (SELECT ... LIMIT X) as t
 - If no SQL needed, respond with "NO_SQL_NEEDED:" followed by your answer
 
 Use the database schema and context from our previous conversation."""
