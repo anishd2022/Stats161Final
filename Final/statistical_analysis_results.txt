@@ -1,0 +1,378 @@
+
+ADS TABLE - STATISTICAL PROPERTIES
+================================================================================
+
+Label Distribution:
+  - Total samples: 10,000
+  - Label 0: 98.20%
+  - Label 1: 1.80%
+  - Imbalance ratio: 54.56x
+  - WARNING: Highly imbalanced dataset - maintain this ratio in synthetic data
+
+Strong Correlations (|r| > 0.3):
+  - gender ↔ emui_dev: r = -0.443
+  - gender ↔ series_group: r = -0.403
+  - series_group ↔ emui_dev: r = 0.389
+  - series_dev ↔ series_group: r = -0.357
+  - creat_type_cd ↔ slot_id: r = -0.312
+
+Column-Specific Statistical Properties:
+
+ad_click_list_v001 (json):
+  Average length: 4.3 items
+  Length range: [1, 5]
+  Median length: 5.0 items
+
+ad_click_list_v002 (json):
+  Average length: 4.3 items
+  Length range: [1, 5]
+  Median length: 5.0 items
+
+ad_click_list_v003 (json):
+  Average length: 3.7 items
+  Length range: [1, 5]
+  Median length: 4.0 items
+
+ad_close_list_v001 (json):
+  Average length: 1.1 items
+  Length range: [1, 5]
+  Median length: 1.0 items
+
+ad_close_list_v002 (json):
+  Average length: 1.1 items
+  Length range: [1, 5]
+  Median length: 1.0 items
+
+ad_close_list_v003 (json):
+  Average length: 1.1 items
+  Length range: [1, 5]
+  Median length: 1.0 items
+
+adv_id (numeric):
+  Range: [10004.00, 23567.00]
+  Mean: 16570.41, Median: 16596.00, Std: 3956.43
+  Quartiles: Q1=12977.00, Q3=19978.50
+
+adv_prim_id (numeric):
+  Range: [1005.00, 2080.00]
+  Mean: 1459.30, Median: 1432.00, Std: 328.52
+  Quartiles: Q1=1187.00, Q3=1718.25
+
+age (numeric):
+  Range: [2.00, 9.00]
+  Mean: 5.45, Median: 6.00, Std: 2.20
+  Quartiles: Q1=3.00, Q3=7.00
+
+app_score (numeric):
+  Range: [0.00, 10.00]
+  Mean: 8.41, Median: 10.00, Std: 3.66
+  Quartiles: Q1=10.00, Q3=10.00
+  Skewness: -1.86 (left-skewed)
+
+app_second_class (numeric):
+  Range: [11.00, 30.00]
+  Mean: 17.72, Median: 17.00, Std: 4.11
+  Quartiles: Q1=14.00, Q3=18.00
+  Skewness: 1.02 (right-skewed)
+
+city (numeric):
+  Range: [101.00, 441.00]
+  Mean: 273.49, Median: 300.00, Std: 96.13
+  Quartiles: Q1=181.00, Q3=343.00
+
+city_rank (numeric):
+  Range: [2.00, 5.00]
+  Mean: 3.30, Median: 3.00, Std: 1.28
+  Quartiles: Q1=2.00, Q3=5.00
+
+creat_type_cd (numeric):
+  Range: [2.00, 10.00]
+  Mean: 7.94, Median: 8.00, Std: 1.94
+  Quartiles: Q1=8.00, Q3=10.00
+  Skewness: -1.34 (left-skewed)
+
+device_name (numeric):
+  Range: [101.00, 358.00]
+  Mean: 232.87, Median: 229.00, Std: 76.25
+  Quartiles: Q1=164.00, Q3=304.00
+
+device_size (numeric):
+  Range: [1001.00, 2579.00]
+  Mean: 1962.31, Median: 2117.00, Std: 427.07
+  Quartiles: Q1=1631.00, Q3=2353.00
+
+emui_dev (numeric):
+  Range: [11.00, 37.00]
+  Mean: 21.58, Median: 20.00, Std: 7.60
+  Quartiles: Q1=16.00, Q3=28.00
+
+gender (numeric):
+  Range: [2.00, 4.00]
+  Mean: 2.38, Median: 2.00, Std: 0.74
+  Quartiles: Q1=2.00, Q3=2.00
+  Skewness: 1.58 (right-skewed)
+
+hispace_app_tags (numeric):
+  Range: [12.00, 53.00]
+  Mean: 37.02, Median: 43.00, Std: 12.91
+  Quartiles: Q1=20.00, Q3=47.00
+
+inter_type_cd (numeric):
+  Range: [3.00, 5.00]
+  Mean: 4.26, Median: 4.00, Std: 0.64
+  Quartiles: Q1=4.00, Q3=5.00
+
+label (numeric):
+  Range: [0.00, 1.00]
+  Mean: 0.02, Median: 0.00, Std: 0.13
+  Quartiles: Q1=0.00, Q3=0.00
+  Skewness: 7.25 (right-skewed)
+
+log_id (numeric):
+  Range: [67.00, 1175894.00]
+  Mean: 551343.61, Median: 549409.00, Std: 320533.60
+  Quartiles: Q1=274485.50, Q3=820080.50
+
+net_type (numeric):
+  Range: [2.00, 7.00]
+  Mean: 6.39, Median: 7.00, Std: 1.17
+  Quartiles: Q1=6.00, Q3=7.00
+  Skewness: -1.79 (left-skewed)
+
+pt_d (numeric):
+  Range: [202206021023.00, 202206101204.00]
+  Mean: 202206059580.34, Median: 202206060545.00, Std: 20036.65
+  Quartiles: Q1=202206040854.50, Q3=202206080250.75
+
+residence (numeric):
+  Range: [11.00, 46.00]
+  Mean: 26.42, Median: 26.00, Std: 9.53
+  Quartiles: Q1=19.00, Q3=33.00
+
+series_dev (numeric):
+  Range: [11.00, 36.00]
+  Mean: 24.43, Median: 27.00, Std: 7.75
+  Quartiles: Q1=16.00, Q3=31.00
+
+series_group (numeric):
+  Range: [2.00, 8.00]
+  Mean: 4.62, Median: 5.00, Std: 1.90
+  Quartiles: Q1=3.00, Q3=6.00
+
+site_id (numeric):
+  Range: [1.00, 1.00]
+  Mean: 1.00, Median: 1.00, Std: 0.00
+  Quartiles: Q1=1.00, Q3=1.00
+
+slot_id (numeric):
+  Range: [12.00, 71.00]
+  Mean: 31.99, Median: 28.00, Std: 17.37
+  Quartiles: Q1=16.00, Q3=50.00
+
+spread_app_id (numeric):
+  Range: [101.00, 372.00]
+  Mean: 235.35, Median: 213.00, Std: 73.65
+  Quartiles: Q1=162.00, Q3=309.00
+
+task_id (numeric):
+  Range: [10006.00, 36344.00]
+  Mean: 23443.87, Median: 22995.00, Std: 8021.18
+  Quartiles: Q1=16068.00, Q3=30991.00
+
+u_feedLifeCycle (numeric):
+  Range: [10.00, 17.00]
+  Mean: 16.42, Median: 17.00, Std: 1.59
+  Quartiles: Q1=17.00, Q3=17.00
+  Skewness: -2.94 (left-skewed)
+
+u_newsCatInterestsST (json):
+  Average length: 4.8 items
+  Length range: [1, 5]
+  Median length: 5.0 items
+
+u_refreshTimes (numeric):
+  Range: [0.00, 9.00]
+  Mean: 5.83, Median: 6.00, Std: 2.97
+  Quartiles: Q1=4.00, Q3=9.00
+
+user_id (numeric):
+  Range: [100006.00, 287180.00]
+  Mean: 192930.16, Median: 192454.00, Std: 54092.99
+  Quartiles: Q1=145424.75, Q3=239803.25
+
+
+FEEDS TABLE - STATISTICAL PROPERTIES
+================================================================================
+
+Label Distribution:
+  - Total samples: 10,000
+  - Label -1: 89.80%
+  - Label 1: 10.20%
+  - Imbalance ratio: 8.80x
+
+Strong Correlations (|r| > 0.3):
+  - i_dtype ↔ e_et: r = 0.634
+    → STRONG: Maintain this relationship in synthetic data
+  - i_dislikeTimes ↔ i_upTimes: r = 0.583
+    → STRONG: Maintain this relationship in synthetic data
+  - u_browserLifeCycle ↔ u_feedLifeCycle: r = 0.509
+    → STRONG: Maintain this relationship in synthetic data
+  - u_feedLifeCycle ↔ u_refreshTimes: r = 0.495
+  - i_dtype ↔ e_section: r = -0.383
+  - u_browserLifeCycle ↔ u_refreshTimes: r = 0.382
+  - i_upTimes ↔ e_section: r = 0.343
+
+Column-Specific Statistical Properties:
+
+cillabel (numeric):
+  Range: [-1.00, 1.00]
+  Mean: -1.00, Median: -1.00, Std: 0.02
+  Quartiles: Q1=-1.00, Q3=-1.00
+  Skewness: 100.00 (right-skewed)
+
+e_ch (numeric):
+  Range: [1.00, 20.00]
+  Mean: 18.00, Median: 19.00, Std: 3.21
+  Quartiles: Q1=19.00, Q3=19.00
+  Skewness: -3.53 (left-skewed)
+
+e_et (numeric):
+  Range: [202206030018.00, 202206092329.00]
+  Mean: 202206060908.84, Median: 202206061121.00, Std: 19989.26
+  Quartiles: Q1=202206041927.00, Q3=202206080826.00
+
+e_m (numeric):
+  Range: [14.00, 1483.00]
+  Mean: 839.55, Median: 847.00, Std: 423.01
+  Quartiles: Q1=564.00, Q3=1205.00
+
+e_pl (numeric):
+  Range: [0.00, 3188.00]
+  Mean: 1615.73, Median: 1674.00, Std: 869.44
+  Quartiles: Q1=879.00, Q3=2305.00
+
+e_po (numeric):
+  Range: [1.00, 27.00]
+  Mean: 7.80, Median: 7.00, Std: 4.20
+  Quartiles: Q1=6.00, Q3=10.00
+
+e_rn (numeric):
+  Range: [1.00, 86.00]
+  Mean: 2.99, Median: 1.00, Std: 4.91
+  Quartiles: Q1=1.00, Q3=3.00
+  Skewness: 6.32 (right-skewed)
+
+e_section (numeric):
+  Range: [0.00, 1.00]
+  Mean: 0.30, Median: 0.00, Std: 0.46
+  Quartiles: Q1=0.00, Q3=1.00
+
+i_cat (numeric):
+  Range: [0.00, 220.00]
+  Mean: 113.27, Median: 108.00, Std: 64.00
+  Quartiles: Q1=65.00, Q3=169.00
+
+i_dislikeTimes (numeric):
+  Range: [0.00, 9.00]
+  Mean: 2.23, Median: 0.00, Std: 3.02
+  Quartiles: Q1=0.00, Q3=4.00
+  Skewness: 1.11 (right-skewed)
+
+i_docId (categorical):
+  Unique values: 5864
+  Most common: 9009cab9f05574e8eace4cacbed009b475f97b5f (0.3%)
+
+i_dtype (numeric):
+  Range: [10.00, 14.00]
+  Mean: 11.81, Median: 11.00, Std: 1.16
+  Quartiles: Q1=11.00, Q3=13.00
+
+i_entities (json):
+  Average length: 4.4 items
+  Length range: [0, 5]
+  Median length: 5.0 items
+  Empty/null: 3.5%
+
+i_regionEntity (numeric):
+  Range: [0.00, 3187.00]
+  Mean: 468.24, Median: 0.00, Std: 880.76
+  Quartiles: Q1=0.00, Q3=566.00
+  Skewness: 1.71 (right-skewed)
+
+i_s_sourceId (categorical):
+  Unique values: 561
+  Most common: 645e57afbbafce5159ab7fe956837c40103f33c9 (4.2%)
+
+i_upTimes (numeric):
+  Range: [0.00, 9.00]
+  Mean: 4.32, Median: 4.00, Std: 3.79
+  Quartiles: Q1=0.00, Q3=9.00
+
+id (numeric):
+  Range: [126.00, 3227523.00]
+  Mean: 1631454.74, Median: 1640873.00, Std: 935954.82
+  Quartiles: Q1=810975.50, Q3=2445992.50
+
+label (numeric):
+  Range: [-1.00, 1.00]
+  Mean: -0.80, Median: -1.00, Std: 0.61
+  Quartiles: Q1=-1.00, Q3=-1.00
+  Skewness: 2.63 (right-skewed)
+
+pro (numeric):
+  Range: [0.00, 100.00]
+  Mean: 7.54, Median: 0.00, Std: 24.96
+  Quartiles: Q1=0.00, Q3=0.00
+  Skewness: 3.21 (right-skewed)
+
+u_browserLifeCycle (numeric):
+  Range: [10.00, 17.00]
+  Mean: 16.48, Median: 17.00, Std: 1.47
+  Quartiles: Q1=17.00, Q3=17.00
+  Skewness: -3.22 (left-skewed)
+
+u_browserMode (numeric):
+  Range: [10.00, 17.00]
+  Mean: 13.35, Median: 14.00, Std: 1.63
+  Quartiles: Q1=13.00, Q3=14.00
+
+u_click_ca2_news (json):
+  Average length: 4.7 items
+  Length range: [1, 5]
+  Median length: 5.0 items
+
+u_feedLifeCycle (numeric):
+  Range: [10.00, 17.00]
+  Mean: 16.06, Median: 17.00, Std: 1.95
+  Quartiles: Q1=16.00, Q3=17.00
+  Skewness: -2.05 (left-skewed)
+
+u_newsCatDislike (json):
+  Average length: 1.0 items
+  Length range: [1, 5]
+  Median length: 1.0 items
+
+u_newsCatInterests (json):
+  Average length: 4.7 items
+  Length range: [1, 5]
+  Median length: 5.0 items
+
+u_newsCatInterestsST (json):
+  Average length: 4.4 items
+  Length range: [1, 5]
+  Median length: 5.0 items
+
+u_phonePrice (numeric):
+  Range: [10.00, 16.00]
+  Mean: 13.29, Median: 14.00, Std: 2.16
+  Quartiles: Q1=11.00, Q3=15.00
+
+u_refreshTimes (numeric):
+  Range: [0.00, 9.00]
+  Mean: 4.77, Median: 5.00, Std: 3.34
+  Quartiles: Q1=2.00, Q3=8.00
+
+u_userId (numeric):
+  Range: [100010.00, 287173.00]
+  Mean: 193826.20, Median: 194168.00, Std: 54437.20
+  Quartiles: Q1=146869.00, Q3=241720.25

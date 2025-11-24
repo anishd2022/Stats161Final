@@ -11,7 +11,7 @@ Give me the top 3 users who clicked the highest percentage of ads that appeared 
 What kinds of ads should we be showing user 101650 so that he is likely to click on the ad?
 suggest an advertisement that would be most likely to be clicked if shown to a user at random
 when were the majority of these ads shown to users? Were there any specific peaks of high ad activity?
-
+identify some strong indicator features / variables of whether or not a user will click on an ad. Provide some quantitative analysis to back your claims
 
 # more complex questions:
 can you generate a list of 5 sample ads which user 101650 will be likely to click on?

@@ -11,7 +11,10 @@ import google.generativeai as genai
 import pymysql
 import pandas as pd
 import uuid
+import json
+import re
 from datetime import datetime
+from typing import Optional, Dict, Any
 
 # Try importing RAG system (optional - app can work without it)
 try:
@@ -29,6 +32,14 @@ except ImportError as e:
     load_rag_collection = _dummy_load_rag_collection
     retrieve_relevant_context = _dummy_retrieve_relevant_context
     format_rag_context = _dummy_format_rag_context
+
+# Try importing synthetic data generator (optional)
+try:
+    from synthetic_generator import SyntheticDataGenerator
+except ImportError as e:
+    print(f"⚠ Warning: Failed to import synthetic_generator: {e}")
+    print("  Synthetic data generation will not be available.")
+    SyntheticDataGenerator = None
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -99,6 +110,79 @@ def load_schema():
             "Please ensure schema_clean.sql exists in the Final/ folder."
         )
 
+def detect_synthetic_data_request(user_query: str) -> Optional[Dict[str, Any]]:
+    """
+    Detect if the user query is asking for synthetic data generation.
+    Only triggers on explicit generation requests, NOT on questions about the process.
+    
+    Returns:
+        Dictionary with parsed parameters if synthetic data request detected, None otherwise
+    """
+    query_lower = user_query.lower().strip()
+    
+    # Exclude questions about the process (these should be answered, not trigger generation)
+    question_words = ['what', 'how', 'explain', 'describe', 'tell me', 'show me', 'can you explain', 
+                     'what is', 'what are', 'what kind of', 'how does', 'how do', 'why', 'when']
+    
+    # If the query starts with a question word, it's likely asking about the process, not requesting generation
+    if any(query_lower.startswith(qw) for qw in question_words):
+        return None
+    
+    # Action verbs that indicate actual generation requests
+    action_verbs = ['generate', 'create', 'make', 'produce', 'build', 'construct']
+    
+    # Keywords that indicate synthetic data generation
+    synthetic_keywords = [
+        'synthetic data', 'synthetic rows', 'synthetic records',
+        'synthetic dataset', 'fake data', 'artificial data',
+        'new data', 'synthetic sample'
+    ]
+    
+    # Must have BOTH an action verb AND synthetic keywords to be a generation request
+    has_action = any(verb in query_lower for verb in action_verbs)
+    has_synthetic = any(keyword in query_lower for keyword in synthetic_keywords)
+    
+    if not (has_action and has_synthetic):
+        return None
+    
+    # Extract table name
+    table_name = None
+    if 'ads' in query_lower or 'ad' in query_lower:
+        if 'feed' not in query_lower or query_lower.find('ads') < query_lower.find('feed'):
+            table_name = 'ads'
+    if 'feed' in query_lower and table_name is None:
+        table_name = 'feeds'
+    
+    # Default to ads if not specified
+    if table_name is None:
+        table_name = 'ads'
+    
+    # Extract number of rows
+    n_rows = 100  # default
+    row_patterns = [
+        r'(\d+)\s*(?:rows?|records?|samples?|data points?)',
+        r'generate\s+(\d+)',
+        r'create\s+(\d+)',
+        r'(\d+)\s*synthetic'
+    ]
+    
+    for pattern in row_patterns:
+        match = re.search(pattern, query_lower)
+        if match:
+            try:
+                n_rows = int(match.group(1))
+                # Cap at reasonable limit
+                n_rows = min(max(n_rows, 1), 10000)
+                break
+            except:
+                pass
+    
+    return {
+        'is_synthetic': True,
+        'table_name': table_name,
+        'n_rows': n_rows
+    }
+
 def create_full_sql_prompt(schema, user_query, rag_context=""):
     """Create the full prompt for the first message in a chat session."""
     rag_section = ""
@@ -108,7 +192,7 @@ Additional Context from Documentation:
 {rag_context}
 """
     
-    prompt = f"""You are a helpful database assistant. A user has asked a question about a database. Your task is to determine if the question requires querying the database with SQL, or if it can be answered using the provided context and documentation.
+    prompt = f"""You are a helpful database assistant. A user has asked a question about a database. Your task is to determine the type of request and respond appropriately.
 
 Database Schema:
 {schema}
@@ -123,16 +207,28 @@ Important Notes:
 User Question: {user_query}
 
 Instructions:
-1. First, determine if this question requires SQL to answer:
-   - If the question asks about specific data values, counts, aggregations, or requires querying the database → SQL is needed
-   - If the question asks about variable definitions, data structure, general information, or can be answered from documentation → SQL is NOT needed
-   - **IMPORTANT**: Recommendation-style questions (e.g., "generate ads user X will click", "recommend ads for user Y", "what ads should we show user Z") CAN be answered with SQL by:
-     * Finding items the user has interacted with (clicked ads, viewed content, etc.)
-     * Finding other items with similar characteristics (same task_id, advertiser_id, app_id, category, etc.)
-     * Returning those similar items as recommendations
-     * This does NOT require machine learning - it's a similarity-based recommendation using historical data
+1. First, determine the type of request:
+   a) **SYNTHETIC_DATA_NEEDED**: ONLY if the question explicitly requests to GENERATE/CREATE/MAKE synthetic data with action verbs like "generate", "create", "make". Examples: "generate synthetic data", "create 50 synthetic rows", "make synthetic dataset". 
+   
+   **CRITICAL**: Questions about synthetic data (like "what process do you use", "how do you generate", "explain synthetic data generation") are NOT generation requests - they are NO_SQL_NEEDED and should be answered with information about the process.
+   
+   b) **SQL_NEEDED**: If the question asks about specific data values, counts, aggregations, or requires querying the database → SQL is needed
+   c) **NO_SQL_NEEDED**: If the question asks about variable definitions, data structure, general information, HOW synthetic data generation works, WHAT process is used, or can be answered from documentation → SQL is NOT needed
+   
+   **IMPORTANT DISTINCTIONS**:
+   - "Generate synthetic data" / "Create synthetic rows" = SYNTHETIC_DATA_NEEDED (creating new artificial data)
+   - "What process do you use to generate synthetic data?" / "How do you generate synthetic data?" = NO_SQL_NEEDED (explaining the process)
+   - "Recommend ads" / "Suggest ads" / "What ads should I show" = SQL_NEEDED (finding existing similar ads)
+   - "Generate ads user X will click" (when asking for recommendations) = SQL_NEEDED (finding similar existing ads)
 
-2. If SQL is needed:
+2. If SYNTHETIC_DATA_NEEDED:
+   - Start your response with "SYNTHETIC_DATA_NEEDED:"
+   - Extract and specify: table_name (ads or feeds), n_rows (number of rows to generate)
+   - Format: "SYNTHETIC_DATA_NEEDED: table_name=ads, n_rows=50"
+   - If table name is not clear, default to "ads"
+   - If number of rows is not specified, use a reasonable default (50-100)
+
+3. If SQL_NEEDED:
    - Generate MySQL SQL query(ies) to answer the question
    - For recommendation queries: Find items similar to what the user has interacted with (same task_id, advertiser_id, app_id, etc.)
    - If multiple queries are needed, provide them separated by semicolons or newlines
@@ -140,17 +236,9 @@ Instructions:
    - Do not include code blocks (```sql or ```) around the query
    - Start your response with "SQL_NEEDED:" followed by the query(ies)
 
-3. If SQL is NOT needed:
+4. If NO_SQL_NEEDED:
    - Provide a clear, helpful answer based on the schema and documentation
    - Start your response with "NO_SQL_NEEDED:" followed by your answer
-
-Reasoning Guidelines:
-- Questions asking to "generate", "recommend", "suggest", or "find ads user X will click" should use SQL to:
-  1. First, find what the user has clicked/interacted with
-  2. Then, find other ads/items with matching or similar attributes (task_id, advertiser_id, app_id, etc.)
-  3. Return those similar items as recommendations
-- This is a data-driven recommendation approach, not requiring ML models
-- Be creative with SQL - you can use subqueries, joins, and JSON functions to find similar items
 
 Remember: Only use SQL when absolutely necessary. If the question can be answered from the schema or documentation alone, provide a direct answer instead."""
     
@@ -164,23 +252,49 @@ def create_short_sql_prompt(user_query, rag_context=""):
     
     prompt = f"""User Question: {user_query}{rag_section}
 
-Follow the same process as before: determine if SQL is needed, generate SQL queries if required (starting with "SQL_NEEDED:"), or provide a direct answer (starting with "NO_SQL_NEEDED:"). Use the database schema and context from our previous conversation."""
+Follow the same process as before: 
+- If explicitly requesting to GENERATE/CREATE synthetic data (with action verbs), respond with "SYNTHETIC_DATA_NEEDED: table_name=X, n_rows=Y"
+- If asking ABOUT synthetic data generation (questions like "what process", "how does it work"), respond with "NO_SQL_NEEDED:" and explain the process
+- If SQL is needed, respond with "SQL_NEEDED:" followed by the query(ies)
+- If no SQL needed, respond with "NO_SQL_NEEDED:" followed by your answer
+
+Use the database schema and context from our previous conversation."""
     
     return prompt
 
 def extract_sql_from_response(response_text):
     """
-    Extract SQL queries or direct answer from Gemini's response.
+    Extract SQL queries, synthetic data request, or direct answer from Gemini's response.
     
     Returns:
-        Tuple (is_sql_needed, sql_queries_list, direct_answer)
+        Tuple (response_type, sql_queries_list, direct_answer, synthetic_params)
+        response_type: 'sql', 'synthetic', 'direct', or 'unknown'
     """
     response_text = response_text.strip()
+    
+    # Check for synthetic data request
+    if response_text.startswith("SYNTHETIC_DATA_NEEDED:"):
+        params_text = response_text.replace("SYNTHETIC_DATA_NEEDED:", "").strip()
+        # Parse parameters: table_name=ads, n_rows=50
+        table_match = re.search(r'table_name\s*=\s*(\w+)', params_text, re.IGNORECASE)
+        rows_match = re.search(r'n_rows\s*=\s*(\d+)', params_text, re.IGNORECASE)
+        
+        table_name = table_match.group(1).lower() if table_match else 'ads'
+        n_rows = int(rows_match.group(1)) if rows_match else 100
+        
+        # Validate table name
+        if table_name not in ['ads', 'feeds']:
+            table_name = 'ads'
+        
+        # Validate n_rows
+        n_rows = min(max(n_rows, 1), 10000)
+        
+        return ('synthetic', [], None, {'table_name': table_name, 'n_rows': n_rows})
     
     # Check if SQL is needed
     if response_text.startswith("NO_SQL_NEEDED:"):
         direct_answer = response_text.replace("NO_SQL_NEEDED:", "").strip()
-        return (False, [], direct_answer)
+        return ('direct', [], direct_answer, None)
     
     if response_text.startswith("SQL_NEEDED:"):
         sql_text = response_text.replace("SQL_NEEDED:", "").strip()
@@ -205,7 +319,7 @@ def extract_sql_from_response(response_text):
     if len(queries) == 1 and "\n\n" in queries[0]:
         queries = [q.strip() for q in queries[0].split("\n\n") if q.strip()]
     
-    return (True, queries, "")
+    return ('sql', queries, None, None)
 
 def get_db_connection():
     """Establish a connection to the MySQL database"""
@@ -445,11 +559,108 @@ def process_query(user_query, session_id=None):
             # Subsequent messages: use chat session (maintains history)
             response = chat_session.send_message(prompt)
         
-        # Extract SQL queries or direct answer from response
-        is_sql_needed, sql_queries, direct_answer = extract_sql_from_response(response.text)
+        # Extract response type and content
+        response_type, sql_queries, direct_answer, synthetic_params = extract_sql_from_response(response.text)
+        
+        # Fallback: Only use detection function if LLM response is unclear (not 'direct' or 'sql')
+        # This prevents overriding correct answers to questions about the process
+        if response_type not in ['synthetic', 'direct', 'sql']:
+            detected = detect_synthetic_data_request(user_query)
+            if detected:
+                response_type = 'synthetic'
+                synthetic_params = detected
+        
+        # Handle synthetic data generation request
+        if response_type == 'synthetic':
+            if SyntheticDataGenerator is None:
+                return {
+                    "success": False,
+                    "error": "Synthetic data generator not available. Please check server logs.",
+                    "answer": None,
+                    "session_id": session_id
+                }
+            
+            # Use parameters from LLM or fallback to detection
+            if synthetic_params:
+                table_name = synthetic_params['table_name']
+                n_rows = synthetic_params['n_rows']
+            else:
+                # Fallback to detection function
+                detected = detect_synthetic_data_request(user_query)
+                if detected:
+                    table_name = detected['table_name']
+                    n_rows = detected['n_rows']
+                else:
+                    table_name = 'ads'
+                    n_rows = 100
+            
+            try:
+                # Get model and database connection
+                gemini_model = get_model()
+                connection = get_db_connection()
+                
+                # Initialize generator
+                generator = SyntheticDataGenerator(
+                    model=gemini_model,
+                    schema=schema,
+                    rag_collection=rag_collection,
+                    db_connection=connection
+                )
+                
+                # Generate synthetic data (RAG-heavy, token-efficient)
+                result = generator.generate(
+                    table_name=table_name,
+                    n_rows=n_rows,
+                    seed_size=50,  # Reduced for efficiency
+                    use_rag=True,
+                    validate=True,
+                    use_llm_critique=False  # Skip for token savings
+                )
+                
+                # Convert DataFrame to JSON-serializable format
+                synthetic_df = result['data']
+                table_json = dataframe_to_json(synthetic_df)
+                
+                # Generate natural language response
+                stats_info = ""
+                if result.get('statistics'):
+                    stats = result['statistics']
+                    if stats.get('correlation_similarity'):
+                        stats_info = f" The synthetic data has a correlation similarity of {stats['correlation_similarity']:.2f} with the real data."
+                
+                answer = f"I've generated {result['row_count']} synthetic rows for the {table_name} table using a pure RAG approach.{stats_info} The data has been validated for schema compliance and statistical similarity."
+                
+                # Update chat metadata
+                chat_metadata[session_id]["message_count"] += 1
+                update_chat_title(session_id, user_query)
+                
+                return {
+                    "success": True,
+                    "answer": answer,
+                    "sql_queries": [],
+                    "needs_sql": False,
+                    "is_synthetic": True,
+                    "session_id": session_id,
+                    "table_data": [table_json] if table_json else [],
+                    "synthetic_stats": result.get('statistics')
+                }
+                
+            except Exception as e:
+                # Ensure connection is closed on error
+                if connection:
+                    try:
+                        connection.close()
+                    except:
+                        pass
+                return {
+                    "success": False,
+                    "error": f"Error generating synthetic data: {str(e)}",
+                    "answer": None,
+                    "session_id": session_id
+                }
         
         # Handle case where SQL is not needed (direct answer)
-        if not is_sql_needed:
+        if response_type == 'direct':
             # Update chat metadata
             chat_metadata[session_id]["message_count"] += 1
             update_chat_title(session_id, user_query)
@@ -462,10 +673,11 @@ def process_query(user_query, session_id=None):
                 "session_id": session_id
             }
         
-        if not sql_queries:
+        # Handle SQL queries
+        if response_type != 'sql' or not sql_queries:
             return {
                 "success": False,
-                "error": "No SQL queries found in the response.",
+                "error": "Could not determine request type or no queries found in the response.",
                 "answer": None,
                 "session_id": session_id
             }
@@ -542,7 +754,11 @@ def process_query(user_query, session_id=None):
         }
     finally:
         if connection:
-            connection.close()
+            try:
+                connection.close()
+            except Exception:
+                # Connection might already be closed, ignore
+                pass
 
 @app.route('/')
 def index():
