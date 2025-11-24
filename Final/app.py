@@ -13,6 +13,7 @@ import pandas as pd
 import uuid
 import json
 import re
+import threading
 from datetime import datetime
 from typing import Optional, Dict, Any
 
@@ -831,37 +832,51 @@ def initialize():
     global schema, rag_collection
     
     print("Starting application initialization...")
+    import sys
+    sys.stdout.flush()  # Ensure output is visible
     
     # Load schema
     try:
         schema = load_schema()
         print("✓ Schema loaded successfully")
+        sys.stdout.flush()
     except Exception as e:
         print(f"⚠ Warning: Error loading schema: {e}")
         print("  App will continue but queries may fail until schema is available.")
+        sys.stdout.flush()
         schema = None
     
-    # Load RAG collection
+    # Load RAG collection (non-blocking, can be slow)
     try:
+        print("Loading RAG collection...")
+        sys.stdout.flush()
         rag_collection = load_rag_collection()
         if rag_collection:
             chunk_count = rag_collection.count()
             print(f"✓ RAG system loaded ({chunk_count} chunks indexed)")
         else:
             print("⚠ RAG index not found. App will work without RAG context.")
+        sys.stdout.flush()
     except Exception as e:
         print(f"⚠ Warning: Could not load RAG system: {e}")
         print("  App will continue without RAG context.")
+        import traceback
+        traceback.print_exc()
+        sys.stdout.flush()
         rag_collection = None
     
     # Validate database connection (non-blocking)
     try:
+        print("Testing database connection...")
+        sys.stdout.flush()
         connection = get_db_connection()
         print("✓ Database connection established")
         connection.close()
+        sys.stdout.flush()
     except Exception as e:
         print(f"⚠ Warning: Could not connect to database: {e}")
         print("  App will start, but queries will fail until database is available.")
+        sys.stdout.flush()
     
     # Check Gemini API key (non-blocking, won't initialize model yet)
     if not GOOGLE_API_KEY:
@@ -869,15 +884,38 @@ def initialize():
         print("  App will start, but queries will fail until GOOGLE_API_KEY is set.")
     else:
         print("✓ GOOGLE_API_KEY found (model will be initialized on first use)")
+    sys.stdout.flush()
     
     print("✓ Application initialization complete")
+    sys.stdout.flush()
 
 # Initialize on import (but don't crash if it fails)
-try:
-    initialize()
-except Exception as e:
-    print(f"⚠ Warning during initialization: {e}")
-    print("  App will continue, but some features may not work.")
+# This runs when the module is imported by gunicorn
+# Use threading to make it non-blocking so app can bind to port quickly
+def initialize_async():
+    """Initialize in background thread to avoid blocking port binding"""
+    try:
+        initialize()
+    except Exception as e:
+        print(f"⚠ Warning during initialization: {e}")
+        print("  App will continue, but some features may not work.")
+        import traceback
+        traceback.print_exc()
+
+# Start initialization in background thread
+init_thread = threading.Thread(target=initialize_async, daemon=True)
+init_thread.start()
+
+# Health check endpoint for Render
+@app.route('/health')
+def health():
+    """Health check endpoint for deployment platforms"""
+    return jsonify({
+        "status": "healthy", 
+        "service": "database-chatbot",
+        "schema_loaded": schema is not None,
+        "rag_loaded": rag_collection is not None
+    }), 200
 
 if __name__ == '__main__':
     # For local development only (gunicorn ignores this)
