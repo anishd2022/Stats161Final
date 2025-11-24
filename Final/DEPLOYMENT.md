@@ -19,8 +19,10 @@ Your code already mentions Render! This is the best option.
 3. Create a new **Web Service**
 4. Configure:
    - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `gunicorn app:app`
+   - **Start Command**: `gunicorn --bind 0.0.0.0:$PORT app:app`
    - **Environment**: Python 3
+   
+   **Note**: The Procfile already has the correct command, so you can leave Start Command empty (it will use Procfile) or set it to match.
 5. Add environment variables in Render dashboard:
    - `GOOGLE_API_KEY`
    - `DB_HOST`
