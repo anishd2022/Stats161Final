@@ -463,10 +463,20 @@ function addMessageToContainer(type, content, isLoading = false, sqlQueriesHtml 
     
     const icon = type === 'user' ? '👤' : type === 'error' ? '⚠️' : '🤖';
     const header = type === 'user' ? 'You' : type === 'error' ? 'Error' : 'Assistant';
+
+    // Parse Markdown using marked.js
+    let contentHtml = '';
+    // Check if marked is available (it should be via CDN)
+    if (typeof marked !== 'undefined' && marked.parse) {
+        // Configure marked to not sanitize if you trust the content, or use DOMPurify if needed
+        // For this use case, we trust the LLM output generally, but be aware of XSS risks
+        contentHtml = marked.parse(content);
+    } else {
+        // Fallback if marked failed to load
+        console.warn('Marked.js not found, falling back to simple formatting');
+        contentHtml = formatContent(content); 
+    }
     
-    // If we have table_data, skip markdown table rendering in text to avoid duplicates
-    const skipMarkdownTables = tableData && tableData.length > 0;
-    let contentHtml = formatContent(content, skipMarkdownTables);
     if (sqlQueriesHtml) {
         contentHtml += sqlQueriesHtml;
     }
@@ -498,6 +508,20 @@ function addMessageToContainer(type, content, isLoading = false, sqlQueriesHtml 
     `;
     
     chatContainer.appendChild(messageDiv);
+    
+    // Render LaTeX math using KaTeX
+    if (window.renderMathInElement) {
+        renderMathInElement(messageDiv.querySelector('.message-content'), {
+            delimiters: [
+                {left: '$$', right: '$$', display: true},
+                {left: '$', right: '$', display: false},
+                {left: '\\(', right: '\\)', display: false},
+                {left: '\\[', right: '\\]', display: true}
+            ],
+            throwOnError: false
+        });
+    }
+
     scrollToBottom();
     
     return messageDiv.id;

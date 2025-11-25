@@ -421,7 +421,10 @@ def get_db_connection():
         password=DB_PW,
         database=DB_NAME,
         port=DB_PORT,
-        cursorclass=pymysql.cursors.DictCursor
+        cursorclass=pymysql.cursors.DictCursor,
+        connect_timeout=60,
+        read_timeout=300,
+        write_timeout=300
     )
 
 def execute_sql_query(connection, sql_query):
