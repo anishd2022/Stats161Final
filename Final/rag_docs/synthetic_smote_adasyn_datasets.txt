@@ -1,0 +1,393 @@
+Synthetic Training Datasets: SMOTE and ADASYN
+==============================================
+
+OVERVIEW
+--------
+The synthetic_train_smote and synthetic_train_adasyn tables contain synthetically generated training data created using advanced oversampling techniques to address class imbalance in the original dataset. These datasets are designed for machine learning model training, particularly for binary classification tasks predicting ad click behavior.
+
+Both tables have identical schemas with 38 columns and contain approximately 482,000+ rows each. The data represents a balanced version of the original training data, where the minority class (positive clicks) has been oversampled to match the majority class.
+
+WHAT ARE SMOTE AND ADASYN?
+---------------------------
+SMOTE (Synthetic Minority Oversampling Technique):
+  - A popular oversampling technique that generates synthetic samples for the minority class
+  - Creates new instances by interpolating between existing minority class examples
+  - Uses k-nearest neighbors (k=5) to identify similar examples and generate new data points
+  - Produces a perfectly balanced dataset (50/50 class distribution)
+  - Maintains the statistical properties and relationships of the original data
+
+ADASYN (Adaptive Synthetic Sampling):
+  - An adaptive version of SMOTE that focuses on generating more synthetic examples for "harder-to-learn" minority class samples
+  - Automatically determines the number of synthetic samples to generate for each minority example based on its learning difficulty
+  - Uses n_neighbors=5 to identify similar examples
+  - Produces a near-balanced dataset (approximately 50/50 class distribution)
+  - Tends to generate more samples in regions where the minority class is underrepresented
+
+PURPOSE AND USE CASES
+---------------------
+1. **Addressing Class Imbalance**: The original training data had a severe class imbalance (approximately 98% negative, 2% positive). These synthetic datasets provide balanced training data.
+
+2. **Model Training**: Used to train machine learning models (e.g., XGBoost, LightGBM) that perform better with balanced datasets, especially for metrics like F1-score, precision, and recall.
+
+3. **Comparative Analysis**: Allows comparison of model performance when trained on:
+   - Original imbalanced data
+   - SMOTE-balanced data
+   - ADASYN-balanced data
+   - Various combinations with class weighting
+
+4. **Research and Experimentation**: Enables researchers to study the effects of different oversampling techniques on model performance.
+
+DATASET CHARACTERISTICS
+--------------------------
+SMOTE Dataset (synthetic_train_smote):
+  - Total rows: 482,668
+  - Label distribution: Perfectly balanced (50.00% class 0, 50.00% class 1)
+  - All columns are numeric (no string/categorical columns)
+  - No missing values (all columns are NOT NULL)
+
+ADASYN Dataset (synthetic_train_adasyn):
+  - Total rows: 482,815
+  - Label distribution: Near-balanced (49.98% class 0, 50.02% class 1)
+  - All columns are numeric (no string/categorical columns)
+  - No missing values (all columns are NOT NULL)
+
+DATA GENERATION PROCESS
+-----------------------
+1. **Data Preprocessing**:
+   - Original ads and feeds training data were preprocessed separately
+   - Categorical variables were label-encoded (converted to numeric codes)
+   - List/array columns (e.g., ad_click_list_001) were converted to counts
+   - Timestamp columns were extracted to hour and dayofweek features
+   - Feeds data was aggregated per user (mean aggregation)
+
+2. **Feature Merging**:
+   - Ads domain features were merged with aggregated feeds domain features
+   - Merged on user_id (ads) and u_userId (feeds)
+   - Missing values filled with 0
+
+3. **Train/Validation Split**:
+   - Original training data split 80/20 (train/validation)
+   - Only the training portion was used for synthetic generation
+
+4. **Synthetic Generation**:
+   - SMOTE and ADASYN were applied to the training split
+   - Generated synthetic samples only for the minority class (label=1)
+   - Original majority class samples were retained
+   - Result: Balanced dataset with original + synthetic samples
+
+5. **Data Preservation**:
+   - Synthetic data saved in non-normalized form (interpretable values)
+   - All original data types and value ranges preserved
+   - No scaling or normalization applied
+
+COLUMN DESCRIPTIONS
+-------------------
+
+=== USER AND DEMOGRAPHIC FEATURES ===
+
+user_id (INT UNSIGNED):
+  - User identifier
+  - Range: 100005 to 148544
+  - Join key for merging ads and feeds data
+  - Approximately 47,000 unique users
+
+age (TINYINT UNSIGNED):
+  - Age group of the user
+  - Range: 0-7 (encoded categories)
+  - Original values were categorical, label-encoded during preprocessing
+  - 8 unique values
+
+gender (TINYINT UNSIGNED):
+  - Gender of the user
+  - Range: 0-2 (encoded categories)
+  - Original values were categorical, label-encoded during preprocessing
+  - 3 unique values
+
+residence (TINYINT UNSIGNED):
+  - User's permanent residence (province)
+  - Range: 0-34 (encoded categories)
+  - Original values were categorical, label-encoded during preprocessing
+  - 35 unique values
+
+city (SMALLINT UNSIGNED):
+  - User's permanent residence (city ID)
+  - Range: 0-324 (encoded categories)
+  - Original values were categorical, label-encoded during preprocessing
+  - 325 unique values
+
+city_rank (TINYINT UNSIGNED):
+  - City tier/level of user's residence
+  - Range: 0-4 (encoded categories)
+  - Original values were categorical, label-encoded during preprocessing
+  - 5 unique values
+
+=== DEVICE INFORMATION ===
+
+series_dev (TINYINT UNSIGNED):
+  - Device series identifier
+  - Range: 0-23 (encoded categories)
+  - Original values were categorical, label-encoded during preprocessing
+  - 24 unique values
+
+series_group (TINYINT UNSIGNED):
+  - Device series group identifier
+  - Range: 0-7 (encoded categories)
+  - Original values were categorical, label-encoded during preprocessing
+  - 8 unique values
+
+emui_dev (TINYINT UNSIGNED):
+  - EMUI (Huawei OS) version number
+  - Range: 0-23 (encoded categories)
+  - Original values were categorical, label-encoded during preprocessing
+  - 24 unique values
+
+device_name (TINYINT UNSIGNED):
+  - Mobile phone model used by the user
+  - Range: 0-209 (encoded categories)
+  - Original values were categorical, label-encoded during preprocessing
+  - 210 unique values
+
+device_size (SMALLINT UNSIGNED):
+  - Screen size of the user's device
+  - Range: 0-592 (encoded categories)
+  - Original values were categorical, label-encoded during preprocessing
+  - 593 unique values
+
+net_type (TINYINT UNSIGNED):
+  - Network type during user's behavior (e.g., WiFi, 4G, 5G)
+  - Range: 0-6 (encoded categories)
+  - Original values were categorical, label-encoded during preprocessing
+  - 7 unique values
+
+=== ADVERTISEMENT INFORMATION ===
+
+task_id (SMALLINT UNSIGNED):
+  - Unique identifier for the advertising campaign
+  - Range: 0-4693 (encoded categories)
+  - Original values were categorical, label-encoded during preprocessing
+  - 4,694 unique values
+
+adv_id (SMALLINT UNSIGNED):
+  - Material ID corresponding to the advertising campaign
+  - Range: 0-5205 (encoded categories)
+  - Original values were categorical, label-encoded during preprocessing
+  - 5,205 unique values
+
+creat_type_cd (TINYINT UNSIGNED):
+  - Creative type ID of the ad material
+  - Range: 0-9 (encoded categories)
+  - Original values were categorical, label-encoded during preprocessing
+  - 10 unique values
+
+adv_prim_id (SMALLINT UNSIGNED):
+  - Advertiser ID corresponding to the ad campaign
+  - Range: 0-408 (encoded categories)
+  - Original values were categorical, label-encoded during preprocessing
+  - 409 unique values
+
+inter_type_cd (TINYINT UNSIGNED):
+  - Interaction type of the ad material (e.g., click, swipe)
+  - Range: 0-3 (encoded categories)
+  - Original values were categorical, label-encoded during preprocessing
+  - 4 unique values
+
+slot_id (TINYINT UNSIGNED):
+  - Ad slot ID (placement position)
+  - Range: 0-54 (encoded categories)
+  - Original values were categorical, label-encoded during preprocessing
+  - 55 unique values
+
+site_id (TINYINT UNSIGNED):
+  - Media site ID
+  - Range: 0-1 (binary)
+  - 2 unique values
+
+spread_app_id (TINYINT UNSIGNED):
+  - Application ID where the ad is displayed
+  - Range: 0-88 (encoded categories)
+  - Original values were categorical, label-encoded during preprocessing
+  - 89 unique values
+
+hispace_app_tags (TINYINT UNSIGNED):
+  - Tags associated with the advertised application
+  - Range: 0-36 (encoded categories)
+  - Original values were categorical, label-encoded during preprocessing
+  - 37 unique values
+
+app_second_class (TINYINT UNSIGNED):
+  - Secondary classification of the advertised app
+  - Range: 0-20 (encoded categories)
+  - Original values were categorical, label-encoded during preprocessing
+  - 21 unique values
+
+app_score (DECIMAL(10,2)):
+  - Application rating score
+  - Range: 0.00 to 10.00
+  - Mean: ~8.40 (SMOTE), ~8.37 (ADASYN)
+  - Median: 10.00
+  - Floating point values preserved from original data
+
+=== USER BEHAVIOR FEATURES (ADS DOMAIN) ===
+
+u_refreshTimes (DECIMAL(10,2)):
+  - Average number of valid news feed refreshes per day
+  - Range: 0.00 to 9.00
+  - Mean: ~4.82 (SMOTE), ~4.86 (ADASYN)
+  - Median: 5.00
+  - Originally from feeds domain, aggregated per user
+
+u_feedLifeCycle (DECIMAL(10,2)):
+  - User engagement level on news feeds
+  - Range: 0.00 to 17.00
+  - Mean: ~15.90 (SMOTE), ~15.95 (ADASYN)
+  - Median: 17.00
+  - Originally from feeds domain, aggregated per user
+
+=== TIME FEATURES ===
+
+hour (TINYINT):
+  - Hour of day extracted from timestamp
+  - All values: -1 (indicating missing/unknown timestamp data)
+  - In original preprocessing, timestamp parsing failed, so all values set to -1
+  - Signed integer to allow -1 as missing value indicator
+
+dayofweek (TINYINT):
+  - Day of week extracted from timestamp (0=Monday, 6=Sunday)
+  - All values: -1 (indicating missing/unknown timestamp data)
+  - In original preprocessing, timestamp parsing failed, so all values set to -1
+  - Signed integer to allow -1 as missing value indicator
+
+=== AGGREGATED FEEDS DOMAIN FEATURES ===
+These features were created by aggregating feeds domain data per user (using mean aggregation) and then merging with ads data. All are prefixed with "feeds_" to indicate their origin.
+
+feeds_u_phonePrice (DECIMAL(10,2)):
+  - Price range of the user's phone (aggregated mean)
+  - Range: 0.00 to 6.00
+  - Mean: ~1.99 (SMOTE), ~2.00 (ADASYN)
+  - Median: 1.00
+  - Original feeds column: u_phonePrice
+
+feeds_u_browserLifeCycle (DECIMAL(10,2)):
+  - User engagement level on the browser (aggregated mean)
+  - Range: 0.00 to 7.00
+  - Mean: ~4.10 (SMOTE), ~4.13 (ADASYN)
+  - Median: 6.00
+  - Original feeds column: u_browserLifeCycle
+
+feeds_u_browserMode (DECIMAL(10,2)):
+  - Browser service type (e.g., standard, lite) (aggregated mean)
+  - Range: 0.00 to 4.00
+  - Mean: ~1.59 (SMOTE), ~1.61 (ADASYN)
+  - Median: ~1.71 (SMOTE), ~1.80 (ADASYN)
+  - Original feeds column: u_browserMode
+
+feeds_u_feedLifeCycle (DECIMAL(10,2)):
+  - User engagement level on news feeds (aggregated mean)
+  - Range: 0.00 to 7.00
+  - Mean: ~3.98 (SMOTE), ~4.02 (ADASYN)
+  - Median: ~5.58 (SMOTE), ~5.69 (ADASYN)
+  - Original feeds column: u_feedLifeCycle
+
+feeds_u_refreshTimes (DECIMAL(10,2)):
+  - Average number of valid news feed refreshes per day (aggregated mean)
+  - Range: 0.00 to 9.00
+  - Mean: ~3.64 (SMOTE), ~3.67 (ADASYN)
+  - Median: ~3.16 (SMOTE), ~3.29 (ADASYN)
+  - Original feeds column: u_refreshTimes
+
+feeds_u_newsCatInterests (DECIMAL(10,2)):
+  - Categories of news the user likes, based on clicks (aggregated mean count)
+  - Range: 0.00 to 4.00
+  - Mean: ~2.38 (SMOTE), ~2.41 (ADASYN)
+  - Median: ~3.72 (SMOTE), ~3.77 (ADASYN)
+  - Original feeds column: u_newsCatInterests (was a list, converted to count, then aggregated)
+  - Represents the average count of interest categories per user
+
+feeds_u_newsCatDislike (DECIMAL(10,2)):
+  - Categories of news the user dislikes (negative feedback) (aggregated mean count)
+  - Range: 0.00 to 4.00
+  - Mean: ~0.01 (both datasets)
+  - Median: 0.00
+  - Original feeds column: u_newsCatDislike (was a list, converted to count, then aggregated)
+  - Represents the average count of disliked categories per user
+
+feeds_u_newsCatInterestsST (DECIMAL(10,2)):
+  - User's short-term interest categories (aggregated mean count)
+  - Range: 0.00 to 4.00
+  - Mean: ~2.30 (SMOTE), ~2.32 (ADASYN)
+  - Median: ~3.24 (SMOTE), ~3.31 (ADASYN)
+  - Original feeds column: u_newsCatInterestsST (was a list, converted to count, then aggregated)
+  - Represents the average count of short-term interest categories per user
+
+feeds_u_click_ca2_news (DECIMAL(10,2)):
+  - Sequence of clicked news categories (aggregated mean count)
+  - Range: 0.00 to 5.00
+  - Mean: ~2.99 (SMOTE), ~3.02 (ADASYN)
+  - Median: ~4.68 (SMOTE), ~4.74 (ADASYN)
+  - Original feeds column: u_click_ca2_news (was a list, converted to count, then aggregated)
+  - Represents the average count of clicked news categories per user
+
+feeds_label (DECIMAL(10,2)):
+  - Average label value from feeds domain (aggregated mean)
+  - Range: 0.00 to 1.00
+  - Mean: ~0.10 (both datasets)
+  - Median: 0.00
+  - Original feeds column: label (1=clicked, -1=not clicked, mapped to 1/0, then aggregated)
+  - Represents the average click rate for the user in feeds domain
+
+=== TARGET VARIABLE ===
+
+label (TINYINT UNSIGNED):
+  - Binary classification target: Whether the user clicked the ad
+  - Values: 0 (no click) or 1 (click)
+  - SMOTE: Perfectly balanced (50.00% each)
+  - ADASYN: Near-balanced (49.98% class 0, 50.02% class 1)
+  - This is the target variable for machine learning models
+
+IMPORTANT NOTES
+---------------
+1. **All values are numeric**: During preprocessing, all categorical variables were label-encoded, and list columns were converted to counts. This makes the data suitable for machine learning algorithms that require numeric input.
+
+2. **No missing values**: All columns are NOT NULL. Missing values in original data were handled during preprocessing (filled with 'unknown' then encoded, or filled with 0 for merged features).
+
+3. **Time features are invalid**: The hour and dayofweek columns all contain -1, indicating that timestamp parsing failed during preprocessing. These features are not useful for analysis.
+
+4. **Aggregated features**: Features prefixed with "feeds_" represent aggregated (mean) values from the feeds domain, merged at the user level with ads data.
+
+5. **Interpretable values**: Unlike normalized data, these values are in their original scale and can be interpreted directly (e.g., app_score of 8.5 means an app rating of 8.5 out of 10).
+
+6. **Synthetic samples**: Approximately half of the positive class (label=1) samples are synthetically generated. The negative class (label=0) samples are all from the original training data.
+
+QUERYING EXAMPLES
+-----------------
+1. Count rows in each dataset:
+   SELECT COUNT(*) FROM synthetic_train_smote;
+   SELECT COUNT(*) FROM synthetic_train_adasyn;
+
+2. Check label distribution:
+   SELECT label, COUNT(*) as count, 
+          ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM synthetic_train_smote), 2) as percentage
+   FROM synthetic_train_smote
+   GROUP BY label;
+
+3. Compare average app_score between datasets:
+   SELECT 'SMOTE' as dataset, AVG(app_score) as avg_app_score
+   FROM synthetic_train_smote
+   UNION ALL
+   SELECT 'ADASYN' as dataset, AVG(app_score) as avg_app_score
+   FROM synthetic_train_adasyn;
+
+4. Find users with highest engagement (feeds_u_feedLifeCycle):
+   SELECT user_id, feeds_u_feedLifeCycle, label
+   FROM synthetic_train_smote
+   ORDER BY feeds_u_feedLifeCycle DESC
+   LIMIT 10;
+
+5. Compare feature distributions between positive and negative classes:
+   SELECT label, 
+          AVG(app_score) as avg_app_score,
+          AVG(feeds_u_newsCatInterests) as avg_interests,
+          AVG(feeds_u_refreshTimes) as avg_refresh
+   FROM synthetic_train_smote
+   GROUP BY label;
+
