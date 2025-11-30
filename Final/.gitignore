@@ -1,3 +1,5 @@
 .env
 train_data_ads.csv
 train_data_feeds.csv
+synthetic_train_ADASYN_raw.csv
+synthetic_train_SMOTE_raw.csv
