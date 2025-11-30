@@ -586,39 +586,76 @@ def generate_chart_config(user_query, all_results):
     Returns: JSON dict or None
     """
     # Quick check if a chart was requested
-    chart_keywords = ["plot", "chart", "graph", "visualize", "visualization", "histogram", "scatter"]
-    if not any(keyword in user_query.lower() for keyword in chart_keywords):
+    chart_keywords = ["plot", "chart", "graph", "visualize", "visualization", "histogram", "scatter", "overlay", "overlayed", "compare", "comparison"]
+    query_lower = user_query.lower()
+    has_chart_keyword = any(keyword in query_lower for keyword in chart_keywords)
+    if not has_chart_keyword:
+        print(f"Chart generation skipped: No chart keywords found in query: {user_query[:100]}")
         return None
         
-    # Format data for the prompt
-    data_preview = ""
+    # Format data for the prompt - include ALL results for comparison/overlay charts
+    data_sections = []
     if all_results:
-        # Just use the first result that has data
-        for sql, res in all_results:
+        for idx, (sql, res) in enumerate(all_results, 1):
             if isinstance(res, pd.DataFrame) and not res.empty:
+                # Include SQL query context to help identify which dataset it is
+                sql_hint = ""
+                sql_lower = sql.lower()
+                if "smote" in sql_lower:
+                    sql_hint = " (SMOTE data)"
+                elif "adasyn" in sql_lower:
+                    sql_hint = " (ADASYN data)"
+                
                 data_preview = res.head(20).to_string()
-                break
+                data_sections.append(f"Query {idx}{sql_hint}:\n{data_preview}")
     
-    if not data_preview:
+    if not data_sections:
         return None
+
+    # Combine all data sections
+    all_data_preview = "\n\n".join(data_sections)
+    
+    # Detect if this is a comparison/overlay request
+    is_comparison = any(word in query_lower for word in ["compare", "comparison", "overlay", "overlayed", "difference", "between", "vs", "versus"])
+    
+    print(f"Generating chart config: query='{user_query[:100]}', is_comparison={is_comparison}, num_results={len(data_sections)}")
 
     prompt = f"""You are a data visualization assistant.
 User Request: "{user_query}"
-Data available (first 20 rows):
-{data_preview}
+{"This appears to be a comparison/overlay request - you should create a chart with multiple datasets." if is_comparison else ""}
+
+Data available:
+{all_data_preview}
 
 Task: Create a Chart.js (version 3+) configuration JSON to visualize this data based on the user's request.
-1. If the data is suitable for the requested chart (bar, line, pie, scatter, etc.), output ONLY the valid JSON object.
+{"IMPORTANT: For comparison/overlay charts, create multiple datasets in the 'datasets' array, one for each query result. Use different colors for each dataset. Align the data by matching keys (e.g., if both queries have a 'gender' column, use gender values as labels and ensure data arrays are aligned by the same label order)." if is_comparison else ""}
+
+1. If the data is suitable for the requested chart (bar, line, pie, scatter, histogram, etc.), output ONLY the valid JSON object.
 2. If the data cannot be visualized or no chart was explicitly requested, output "NO_CHART".
+
+For histograms: Use type "bar" with appropriate binning. For overlayed histograms, use multiple datasets with different colors and set the barThickness or categoryPercentage/barPercentage to allow overlapping.
+
+{"CRITICAL FOR OVERLAID HISTOGRAMS: If you have multiple queries with the same structure (e.g., both have 'gender' and 'count' columns), create labels from the key column (gender) and create one dataset per query, extracting the count values in the same order as the labels. Label each dataset appropriately (e.g., 'SMOTE' and 'ADASYN' based on the query context)." if is_comparison else ""}
 
 JSON Structure:
 {{
   "type": "bar",
   "data": {{
     "labels": ["A", "B"],
-    "datasets": [{{ "label": "Metric", "data": [10, 20], "backgroundColor": "rgba(75, 192, 192, 0.6)" }}]
+    "datasets": [
+      {{ "label": "Dataset 1", "data": [10, 20], "backgroundColor": "rgba(75, 192, 192, 0.6)", "borderColor": "rgba(75, 192, 192, 1)" }},
+      {{ "label": "Dataset 2", "data": [15, 25], "backgroundColor": "rgba(255, 99, 132, 0.6)", "borderColor": "rgba(255, 99, 132, 1)" }}
+    ]
   }},
-  "options": {{ "plugins": {{ "title": {{ "display": true, "text": "Title" }} }} }}
+  "options": {{
+    "plugins": {{ 
+      "title": {{ "display": true, "text": "Chart Title" }},
+      "legend": {{ "display": true }}
+    }},
+    "scales": {{
+      "y": {{ "beginAtZero": true }}
+    }}
+  }}
 }}
 
 Return ONLY the raw JSON. No markdown, no backticks, no explanations."""
@@ -642,9 +679,32 @@ Return ONLY the raw JSON. No markdown, no backticks, no explanations."""
             if lines[-1] == "```": lines = lines[:-1]
             text = "\n".join(lines)
             
-        return json.loads(text)
+        chart_config = json.loads(text)
+        print(f"Successfully generated chart config: type={chart_config.get('type')}, num_datasets={len(chart_config.get('data', {}).get('datasets', []))}")
+        
+        # Post-process for overlayed histograms: ensure proper bar configuration
+        if is_comparison and chart_config.get("type") == "bar" and len(chart_config.get("data", {}).get("datasets", [])) > 1:
+            # For overlayed bars, we want them to overlap
+            if "options" not in chart_config:
+                chart_config["options"] = {}
+            if "scales" not in chart_config["options"]:
+                chart_config["options"]["scales"] = {}
+            if "x" not in chart_config["options"]["scales"]:
+                chart_config["options"]["scales"]["x"] = {}
+            # Allow bars to overlap by adjusting category percentage
+            chart_config["options"]["scales"]["x"]["stacked"] = False
+            # Set bar percentage to allow overlap
+            if "bar" not in chart_config["options"]["scales"]["x"]:
+                chart_config["options"]["scales"]["x"]["bar"] = {}
+            chart_config["options"]["scales"]["x"]["bar"]["categoryPercentage"] = 0.8
+            chart_config["options"]["scales"]["x"]["bar"]["barPercentage"] = 0.9
+        
+        return chart_config
     except Exception as e:
         print(f"Chart generation failed: {e}")
+        print(f"Response text was: {text[:500] if 'text' in locals() else 'N/A'}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
