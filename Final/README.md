@@ -60,7 +60,28 @@ DB_PORT=3306
 
 ### Database Setup
 
-Ensure your MySQL database is set up with the schema defined in `schema_clean.sql`. The application expects tables named `ads` and `feeds` with the structure defined in the schema file.
+The project includes multiple schema files:
+- `schema_clean.sql` - Main database schema for ads and feeds tables
+- `schema.sql` - Alternative schema definition
+- `schema_generative.sql` - Schema for generative/synthetic data tables
+
+Ensure your MySQL database is set up with one of the schema files. The application expects tables named `ads` and `feeds` with the structure defined in the schema file.
+
+#### Populating the Database
+
+After setting up the schema, you can populate the database with data:
+
+**For regular training data:**
+```bash
+python populate_db.py
+```
+This script loads data from `train_data_ads.csv` and `train_data_feeds.csv` into the database.
+
+**For synthetic data (SMOTE/ADASYN):**
+```bash
+python populate_synthetic_db.py
+```
+This script loads synthetic data from `synthetic_train_SMOTE_raw.csv` and `synthetic_train_ADASYN_raw.csv` into the database.
 
 ## Building the RAG Index
 
@@ -80,6 +101,12 @@ This script will:
 - The first run will download the embedding model (~80MB)
 - Re-run this script whenever you update documents in `rag_docs/`
 - The RAG system is optional - the application will work without it, but with less context
+
+The RAG documentation includes information about:
+- Dataset overview and variable descriptions
+- Database schema details
+- Synthetic data generation methods (SMOTE, ADASYN)
+- Guidelines for generating synthetic data
 
 ## Running the Application
 
@@ -120,25 +147,41 @@ Type `quit` or `exit` to end the session.
 
 ```
 Final/
-├── app.py                  # Flask web application
-├── query.py                # Command-line interface
-├── rag_system.py           # RAG system implementation
-├── build_rag_index.py      # Script to build RAG index
-├── requirements.txt        # Python dependencies
-├── schema_clean.sql        # Database schema definition
-├── .env                    # Environment variables (create this)
-├── chroma_db/              # RAG index storage (created by build_rag_index.py)
-├── rag_docs/               # Documentation files for RAG
+├── app.py                      # Flask web application
+├── query.py                    # Command-line interface
+├── rag_system.py               # RAG system implementation
+├── build_rag_index.py          # Script to build RAG index
+├── populate_db.py              # Script to populate database with training data
+├── populate_synthetic_db.py    # Script to populate database with synthetic data
+├── synthetic_generator.py      # Synthetic data generation using RAG
+├── analyze_data_statistics.py  # Script to analyze database statistics
+├── requirements.txt            # Python dependencies
+├── schema_clean.sql            # Main database schema definition
+├── schema.sql                  # Alternative schema definition
+├── schema_generative.sql       # Schema for synthetic data tables
+├── DEPLOYMENT.md               # Deployment guide for hosting the application
+├── Procfile                    # Process file for deployment (Heroku/Render)
+├── runtime.txt                 # Python version specification
+├── start.sh                    # Startup script for deployment
+├── .env                        # Environment variables (create this)
+├── chroma_db/                  # RAG index storage (created by build_rag_index.py)
+├── rag_docs/                   # Documentation files for RAG
 │   ├── about_dataset.txt
 │   ├── ads_variable_descriptions.txt
 │   ├── database_schema.txt
-│   └── feeds_variable_descriptions.txt
-├── templates/              # HTML templates for web app
+│   ├── feeds_variable_descriptions.txt
+│   ├── synthetic_data_generation_guide.txt
+│   └── synthetic_smote_adasyn_datasets.txt
+├── templates/                  # HTML templates for web app
 │   └── index.html
-├── static/                 # CSS and JavaScript for web app
+├── static/                     # CSS and JavaScript for web app
 │   ├── style.css
 │   └── script.js
-└── sample_questions.txt    # Example questions you can try
+├── train_data_ads.csv          # Training data for ads table
+├── train_data_feeds.csv        # Training data for feeds table
+├── synthetic_train_SMOTE_raw.csv    # Synthetic data generated using SMOTE
+├── synthetic_train_ADASYN_raw.csv   # Synthetic data generated using ADASYN
+└── sample_questions.txt        # Example questions you can try
 ```
 
 ## Usage Examples
@@ -199,6 +242,23 @@ Key dependencies include:
 
 See `requirements.txt` for the complete list.
 
+## Additional Tools
+
+### Synthetic Data Generation
+
+The project includes a synthetic data generator (`synthetic_generator.py`) that uses RAG to generate synthetic data following the patterns and statistical properties of the original dataset. This can be used to augment training data or create test datasets.
+
+### Data Analysis
+
+The `analyze_data_statistics.py` script analyzes the database to extract statistical properties, correlations, and distributions. This information is used to improve synthetic data generation and provide insights about the dataset.
+
+## Deployment
+
+For deployment instructions, see `DEPLOYMENT.md`. The project includes configuration files for deployment platforms:
+- `Procfile` - Process configuration for Heroku/Render
+- `runtime.txt` - Python version specification
+- `start.sh` - Startup script
+
 ## Notes
 
 - The application uses Google Gemini 2.5 Flash model by default
@@ -206,6 +266,7 @@ See `requirements.txt` for the complete list.
 - Results are limited to 100 rows by default to avoid token limits
 - The RAG system retrieves top 3 relevant document chunks per query
 - All database queries use parameterized queries for security
+- The system supports both original training data and synthetic data (SMOTE/ADASYN)
 
 ## License
 
